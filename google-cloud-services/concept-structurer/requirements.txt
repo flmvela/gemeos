@@ -1,0 +1,11 @@
+# Web framework
+flask
+
+# Supabase database client
+supabase
+
+# Google AI client library for Gemini
+google-generativeai
+
+# Google Cloud Storage client
+google-cloud-storage

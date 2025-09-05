@@ -1,0 +1,232 @@
+# Gemeos Platform - Product Requirements Document (PRD)
+
+## Product Vision & Mission
+Gemeos is an AI-powered, multi-tenant educational platform that creates adaptive learning experiences through human-in-the-loop AI feedback. The platform supports various learning domains (Jazz, GMAT, etc.) and enables educational organizations to deliver personalized curriculum while continuously improving AI-generated content through teacher feedback.
+
+## Core Product Goals
+1. **Adaptive Learning Platform**: Provide students with personalized learning paths and real-time feedback
+2. **Human-AI Collaboration**: Enable teachers/admins to review, approve, or reject AI-generated suggestions
+3. **Continuous AI Improvement**: Learn from human feedback loops to enhance AI output quality over time
+4. **Multi-Tenant Architecture**: Support multiple organizations with domain-specific customization
+5. **Scalable Content Generation**: Automated creation of concepts, learning goals, and exercises
+
+## Target Users & Personas
+
+### Platform Administrator (Sarah)
+- **Role**: Technical administrator managing 50+ tenants
+- **Goals**: Efficiently onboard organizations, maintain curriculum quality, monitor platform health
+- **Pain Points**: Content quality consistency, tenant feature tracking, update management
+
+### Tenant Administrator (Michael) 
+- **Role**: School district IT coordinator managing 200+ teachers across 15 schools
+- **Goals**: Configure organization settings, manage teacher accounts, control curriculum domains
+- **Pain Points**: Limited teacher activity visibility, bulk user management complexity
+
+### Teacher (Emily)
+- **Role**: High school math teacher with 5 classes, 120 students, multiple teaching levels
+- **Goals**: Customize curriculum, manage classes efficiently, track student progress
+- **Pain Points**: Rigid curriculum structures, complex student invitation process
+
+### Student (Alex)
+- **Role**: 10th grade student enrolled in 6 different subject classes
+- **Goals**: Easy access to materials, progress tracking, clear learning objectives
+- **Pain Points**: Navigation complexity, unclear learning paths
+
+## Technical Architecture
+
+### Core Technology Stack
+- **Frontend**: React + TypeScript + Vite + shadcn/ui + Tailwind CSS
+- **Backend**: Supabase (PostgreSQL + Auth + Real-time)
+- **AI Pipeline**: Google Cloud (Pub/Sub, GCS, Vertex AI/Gemini)
+- **Infrastructure**: Multi-tenant with data isolation
+
+### Key Data Entities
+
+#### 1. Domains
+- Subject areas (Jazz, GMAT, Physics)
+- Client-specific activation
+- Hierarchical concept organization
+- Domain-specific guidance files
+
+#### 2. Concepts  
+- Knowledge building blocks within domains
+- Hierarchical parent/child relationships
+- Additional relationships (prerequisite, related)
+- Status workflow: suggested → approved/rejected
+- Source tracking: ai vs human
+
+#### 3. Learning Goals
+- Objectives tied to concepts
+- AI-generated, teacher-refined
+- Bloom's taxonomy level, difficulty, sequence metadata
+- Same workflow + source tracking as concepts
+
+#### 4. Exercises
+- Practical tasks for learners
+- Linked to learning goals and concepts
+- Multiple formats (quiz, interactive, problem sets)
+- Follows same approval workflow
+
+### AI Pipeline Components
+
+#### 1. Preprocessor (Cloud Run Service)
+- Domain-agnostic text/MIDI/audio extraction
+- Saves to Supabase (domain_extracted_files table)
+- Publishes to Pub/Sub for next step triggering
+
+#### 2. Concept Chunker (Cloud Function)
+- Splits raw text into manageable chunks
+- AI-powered candidate concept proposal
+- Inserts into concepts table with status=suggested
+
+#### 3. Concept Structurer (Cloud Function)
+- Processes approved concepts
+- Suggests hierarchies via suggested_concept_hierarchies
+- Domain-specific guidance from GCS
+
+#### 4. Learning Goal Generator (Cloud Function)
+- Uses concept text + guidance + examples
+- Generates learning goals via Gemini AI
+- Stores with status=suggested
+
+#### 5. Exercise Generator (Future)
+- Similar workflow for exercise generation
+- Tied to learning goals
+
+## Core Features & User Stories
+
+### High Priority Features
+
+**Multi-Tenant Management**
+- US001: Create and configure new tenants with unique domains
+- US010: Tenant-specific branding and settings configuration
+- US011: Platform health monitoring and usage analytics
+
+**Domain & Content Management**  
+- US002: Create and manage standard learning domains
+- US003: Enable/disable domains per tenant organization
+- US005: Teachers customize domain content within permissions
+
+**User Management & Access Control**
+- US004: Tenant admins create teacher accounts with domain assignments
+- US006: Teachers create classes with unique join codes
+- US007: Student invitation system (email + bulk CSV)
+- US008: Student class joining via links/codes
+
+**Learning Experience**
+- US009: Students access organized learning materials by class
+- Progress tracking with completion percentages
+- Adaptive content sequencing based on concept relationships
+
+**AI-Human Feedback Loop**
+- Teacher review interface for AI suggestions (approve/reject/edit)
+- Feedback integration into GCS guidance files
+- Continuous AI improvement through human decisions
+- Version tracking for all content modifications
+
+### Medium Priority Features
+
+**Collaboration & Sharing**
+- US012: Teachers share content within domains
+- Content attribution and forking capabilities
+- Domain-wide content libraries
+
+**Advanced Analytics**
+- Student progress analytics
+- Teacher effectiveness metrics
+- AI suggestion accuracy tracking
+- Cross-domain performance insights
+
+## Success Metrics & KPIs
+
+### User Adoption
+- Monthly Active Users (MAU) by role type
+- Tenant onboarding time (target: <24 hours)
+- Feature adoption rates per tenant
+
+### AI Performance
+- AI suggestion approval rate (target: >70%)
+- Time to teacher review (target: <48 hours)
+- Feedback loop improvement metrics
+
+### Learning Outcomes
+- Student engagement metrics (time on platform, completion rates)
+- Learning goal achievement rates
+- Cross-domain knowledge transfer
+
+### Platform Health
+- System uptime (target: 99.9%)
+- Response times (target: <2s page load, <500ms API)
+- Error rates and resolution times
+
+## Technical Requirements
+
+### Performance
+- 10,000 concurrent users per tenant
+- 2-second page load time (95th percentile)
+- 500ms API response time for CRUD operations
+- 100MB file upload support within 30 seconds
+
+### Security  
+- AES-256 encryption at rest, TLS 1.3 in transit
+- Multi-factor authentication for admin roles
+- Row-level security for tenant data isolation
+- GDPR compliance with right-to-be-forgotten
+- SOC 2 Type II compliance for enterprise
+
+### Reliability
+- 99.9% uptime SLA
+- Automated backups every 6 hours (30-day retention)
+- Point-in-time recovery (5-minute windows)
+- Disaster recovery RTO: 1 hour, RPO: 0 for critical operations
+
+## Development Roadmap
+
+### Phase 1 (Current - Foundation)
+- ✅ Core multi-tenant architecture
+- ✅ Basic domain and concept management
+- ✅ Teacher/student class system
+- ✅ AI pipeline infrastructure (preprocessor, chunker)
+- 🔄 Concept structurer and learning goal generator
+- 🔄 Teacher review interface for AI suggestions
+
+### Phase 2 (Next - Enhancement) 
+- Exercise generation AI pipeline
+- Advanced analytics and reporting
+- Content sharing and collaboration features
+- Mobile-responsive improvements
+- Performance optimizations
+
+### Phase 3 (Future - Scale)
+- Advanced AI features (personalization, adaptive paths)
+- Real-time collaboration tools  
+- Third-party integrations (LMS, SIS)
+- Advanced assessment and grading
+- Multi-language support
+
+## Risk Assessment
+
+### Technical Risks
+- **AI Model Performance**: Mitigation through extensive feedback loop testing
+- **Scalability Challenges**: Load testing and infrastructure monitoring
+- **Data Privacy Compliance**: Regular security audits and compliance reviews
+
+### Business Risks  
+- **Teacher Adoption**: Comprehensive onboarding and training programs
+- **Content Quality**: Human oversight and approval workflows
+- **Competition**: Continuous feature development and user feedback integration
+
+## Success Criteria
+- 100+ active tenants within 12 months
+- >70% AI suggestion approval rate
+- <2 second average page load times
+- >90% user satisfaction scores
+- SOC 2 compliance certification
+
+## Out of Scope
+- Payment processing integration
+- Third-party LMS integration
+- Native mobile applications  
+- Real-time collaboration features
+- Advanced gradebook functionality
+- Content authoring tools beyond basic CRUD

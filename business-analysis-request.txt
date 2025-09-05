@@ -1,0 +1,13 @@
+Business Analysis Request: Please analyze the Gemeos platform business requirements and provide insights on:
+
+1. Current business model validation
+2. User personas and their pain points
+3. Business value priorities for development roadmap
+4. Market positioning and competitive advantages
+5. Revenue model alignment with platform features
+6. Risk assessment for business objectives
+
+Please refer to:
+- .taskmaster/docs/prd.txt
+- context/gemeos-project-description.md
+- docs/requirements-package.md

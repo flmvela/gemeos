@@ -1,0 +1,20 @@
+
+project_id = "jfolpnyipoocflcrachg"
+
+[functions.check-guidance-status]
+verify_jwt = false
+
+[functions.save-guidance-content]
+verify_jwt = false
+
+[functions.ai-guidance-chat]
+verify_jwt = false
+
+[functions.trigger-learning-goal-generation]
+verify_jwt = true
+
+[functions.enrich-and-save-learning-goals]
+verify_jwt = true
+
+[functions.vertex-ai-smoke-test]
+verify_jwt = true

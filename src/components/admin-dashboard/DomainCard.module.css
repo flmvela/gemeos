@@ -1,0 +1,359 @@
+/* Domain Card Design System Styles - Following Style Guide */
+
+/* CSS Variables matching the style guide exactly */
+.domainCard {
+  /* Brand Colors */
+  --primary-purple: #110D59;
+  --secondary-purple: #28246F;
+  --accent-blue: #A3D1FC;
+  --text-gray: #7E7BB3;
+  
+  /* Button Colors */
+  --button-primary: #0B5FAE;
+  --button-secondary: #0E77D9;
+  --button-tertiary: #08437A;
+  --button-disabled: #E3E4E8;
+  --button-disabled-text: #D3D4DA;
+  
+  /* Status Colors */
+  --status-active: #22C55E;
+  --status-draft: #F59E0B;
+  --status-archived: #7E7BB3;
+  
+  /* Layout */
+  --background-light: #F1F2F4;
+  --card-background: #FFFFFF;
+  --border-color: #E5E7EB;
+  --border-radius: 8px;
+  --border-radius-lg: 10px;
+  --spacing-unit: 16px;
+  --button-height: 51px;
+  
+  /* Typography Scale - Base 14px */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+  
+  /* Shadows - Elevation Levels */
+  --shadow-level-1: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-level-2: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-level-3: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Card Container */
+.card {
+  background: var(--card-background);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-level-1);
+  transition: all 0.2s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-level-2);
+  transform: translateY(-2px) scale(1.01);
+}
+
+/* Status Indicator Line */
+.statusIndicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  transition: all 0.2s ease;
+}
+
+.statusIndicator.active {
+  background: var(--status-active);
+}
+
+.statusIndicator.draft {
+  background: var(--status-draft);
+}
+
+.statusIndicator.archived {
+  background: var(--status-archived);
+}
+
+/* Card Header */
+.cardHeader {
+  padding: calc(var(--spacing-unit) * 1.5);
+  padding-bottom: var(--spacing-unit);
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-unit);
+  margin-bottom: calc(var(--spacing-unit) * 0.75);
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--primary-purple);
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* Status Badge */
+.badge {
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.badge.active {
+  background: var(--status-active);
+  color: white;
+}
+
+.badge.draft {
+  background: var(--status-draft);
+  color: white;
+}
+
+.badge.archived {
+  background: var(--status-archived);
+  color: white;
+}
+
+/* Description */
+.description {
+  font-size: var(--text-sm);
+  color: var(--text-gray);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.5rem;
+}
+
+/* Statistics Section */
+.statsContainer {
+  background: var(--background-light);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-unit);
+  margin-bottom: calc(var(--spacing-unit) * 1.5);
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-unit);
+}
+
+.statItem {
+  text-align: center;
+}
+
+.statIconWrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto calc(var(--spacing-unit) * 0.5);
+}
+
+.statIconWrapper.concepts {
+  background: rgba(17, 13, 89, 0.1);
+}
+
+.statIconWrapper.goals {
+  background: rgba(40, 36, 111, 0.1);
+}
+
+.statIconWrapper.exercises {
+  background: rgba(11, 95, 174, 0.1);
+}
+
+.statIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.statIcon.concepts {
+  color: var(--primary-purple);
+}
+
+.statIcon.goals {
+  color: var(--secondary-purple);
+}
+
+.statIcon.exercises {
+  color: var(--button-primary);
+}
+
+.statValue {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.statValue.concepts {
+  color: var(--primary-purple);
+}
+
+.statValue.goals {
+  color: var(--secondary-purple);
+}
+
+.statValue.exercises {
+  color: var(--button-primary);
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  color: var(--text-gray);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Last Updated Section */
+.lastUpdated {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+  color: var(--text-gray);
+  margin-bottom: calc(var(--spacing-unit) * 1.5);
+}
+
+.lastUpdated svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Action Buttons */
+.buttonGroup {
+  display: flex;
+  gap: calc(var(--spacing-unit) * 0.75);
+}
+
+.button {
+  flex: 1;
+  height: var(--button-height);
+  border-radius: var(--border-radius);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Primary Button (Analytics) */
+.button.primary {
+  background: var(--button-primary);
+  color: white;
+}
+
+.button.primary:hover {
+  background: linear-gradient(rgba(0,0,0,0.05), rgba(0,0,0,0.05)), var(--button-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(11, 95, 174, 0.25);
+}
+
+.button.primary:active {
+  background: linear-gradient(rgba(0,0,0,0.15), rgba(0,0,0,0.15)), var(--button-primary);
+  transform: translateY(0);
+}
+
+/* Secondary Button (Manage) */
+.button.secondary {
+  background: var(--button-secondary);
+  color: white;
+}
+
+.button.secondary:hover {
+  background: linear-gradient(rgba(0,0,0,0.05), rgba(0,0,0,0.05)), var(--button-secondary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 119, 217, 0.25);
+}
+
+.button.secondary:active {
+  background: linear-gradient(rgba(0,0,0,0.15), rgba(0,0,0,0.15)), var(--button-secondary);
+  transform: translateY(0);
+}
+
+/* Button Icons */
+.button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Focus States for Accessibility */
+.button:focus-visible {
+  outline: 2px solid var(--button-primary);
+  outline-offset: 2px;
+}
+
+/* Disabled State */
+.button:disabled {
+  background: var(--button-disabled);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+  .statsGrid {
+    gap: calc(var(--spacing-unit) * 0.5);
+  }
+  
+  .statValue {
+    font-size: var(--text-xl);
+  }
+  
+  .buttonGroup {
+    flex-direction: column;
+  }
+  
+  .button {
+    width: 100%;
+  }
+}
+
+/* Animation for loading state */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.loading {
+  background: linear-gradient(
+    90deg,
+    var(--background-light) 25%,
+    rgba(163, 209, 252, 0.2) 50%,
+    var(--background-light) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}

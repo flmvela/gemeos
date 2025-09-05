@@ -1,0 +1,12 @@
+Technical Architecture Review Request: Please analyze the Gemeos platform technical architecture and provide recommendations on:
+
+1. Current architecture assessment (React + TypeScript + Supabase + Google Cloud)
+2. Scalability analysis for multi-tenant requirements
+3. AI pipeline optimization and performance considerations
+4. Database schema review and optimization suggestions
+5. Security architecture for multi-tenant data isolation
+6. Performance optimization strategies
+7. Infrastructure scaling recommendations
+8. API design patterns and best practices
+
+Please analyze the existing codebase structure and provide architectural improvements.

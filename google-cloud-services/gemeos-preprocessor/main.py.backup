@@ -1,0 +1,634 @@
+import os
+import json
+import logging
+import traceback
+import hashlib
+import base64
+from datetime import datetime
+from typing import Dict, Optional, Tuple, Any, List
+from flask import Flask, request, jsonify
+from google.cloud import storage
+from google.cloud import pubsub_v1
+from google.cloud.exceptions import NotFound
+from supabase import create_client, Client
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Flask App
+app = Flask(__name__)
+
+# Configuration - can be overridden via environment variables
+CONFIG = {
+    # Core service configuration
+    "SUPABASE_URL": os.getenv("SUPABASE_URL"),
+    "SUPABASE_SERVICE_KEY": os.getenv("SUPABASE_SERVICE_KEY"),
+    "GOOGLE_CLOUD_PROJECT": os.getenv("GOOGLE_CLOUD_PROJECT", "gemeos-467015"),
+    
+    # Domain to bucket mapping
+    "DOMAIN_BUCKETS": {
+        "jazz-music": "gemeos-jazz",
+        "jazz": "gemeos-jazz",  # Alias
+        "gmat": "gemeos-gmat"
+    },
+    
+    # Content type to path mapping
+    "CONTENT_PATHS": {
+        "concept": "concepts/ingestion",
+        "learning_goal": "learning-goals/ingestion", 
+        "exercise": "exercises/ingestion"
+    },
+    
+    # Valid content types (matching enum in database)
+    "VALID_CONTENT_TYPES": ["concept", "learning_goal", "exercise"],
+    
+    # Valid extraction statuses
+    "VALID_STATUSES": ["pending", "processing", "completed", "failed"],
+    
+    # File processing limits
+    "MAX_FILE_SIZE_MB": 100,
+    "CONTENT_HASH_CHUNK_SIZE": 8192
+}
+
+# Global clients (initialized lazily)
+_supabase_client: Optional[Client] = None
+_storage_client: Optional[storage.Client] = None
+_publisher_client: Optional[pubsub_v1.PublisherClient] = None
+
+def get_supabase_client() -> Client:
+    """Get or create Supabase client."""
+    global _supabase_client
+    if _supabase_client is None:
+        if not CONFIG["SUPABASE_URL"] or not CONFIG["SUPABASE_SERVICE_KEY"]:
+            raise ValueError("Missing Supabase configuration")
+        _supabase_client = create_client(CONFIG["SUPABASE_URL"], CONFIG["SUPABASE_SERVICE_KEY"])
+    return _supabase_client
+
+def get_storage_client() -> storage.Client:
+    """Get or create Google Cloud Storage client."""
+    global _storage_client
+    if _storage_client is None:
+        _storage_client = storage.Client(project=CONFIG["GOOGLE_CLOUD_PROJECT"])
+    return _storage_client
+
+def get_publisher_client() -> pubsub_v1.PublisherClient:
+    """Get or create Pub/Sub publisher client."""
+    global _publisher_client
+    if _publisher_client is None:
+        _publisher_client = pubsub_v1.PublisherClient()
+    return _publisher_client
+
+def calculate_content_hash(content: bytes) -> str:
+    """Calculate SHA-256 hash of file content."""
+    sha256_hash = hashlib.sha256()
+    sha256_hash.update(content)
+    return sha256_hash.hexdigest()
+
+def get_domain_uuid(domain_slug: str) -> Optional[str]:
+    """
+    Look up domain UUID from domain slug.
+    
+    Args:
+        domain_slug: The domain identifier (e.g., 'jazz-music', 'gmat')
+        
+    Returns:
+        Domain UUID if found, None otherwise
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Query domains table for UUID
+        result = supabase.table("domains").select("id").eq("slug", domain_slug).execute()
+        
+        if result.data and len(result.data) > 0:
+            return result.data[0]["id"]
+        else:
+            logger.warning(f"Domain not found for slug: {domain_slug}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error looking up domain UUID for '{domain_slug}': {str(e)}")
+        return None
+
+def determine_target_bucket_and_path(domain_slug: str, content_type: str, file_name: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Determine target GCS bucket and path based on domain and content type.
+    
+    Args:
+        domain_slug: Domain identifier
+        content_type: Content type enum value
+        file_name: Original file name
+        
+    Returns:
+        Tuple of (bucket_name, object_path) or (None, None) if invalid
+    """
+    # Validate content type
+    if content_type not in CONFIG["VALID_CONTENT_TYPES"]:
+        logger.error(f"Invalid content type: {content_type}")
+        return None, None
+    
+    # Normalize domain slug
+    domain_slug_normalized = domain_slug.lower().strip()
+    
+    # Get bucket from mapping
+    bucket_name = CONFIG["DOMAIN_BUCKETS"].get(domain_slug_normalized)
+    if not bucket_name:
+        # Fallback to default pattern
+        bucket_name = f"gemeos-{domain_slug_normalized}"
+        logger.warning(f"Using fallback bucket name: {bucket_name}")
+    
+    # Get path from content type
+    content_path = CONFIG["CONTENT_PATHS"].get(content_type, f"{content_type}/ingestion")
+    
+    # Create timestamped file path
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    object_path = f"{content_path}/{timestamp}_{file_name}"
+    
+    return bucket_name, object_path
+
+def extract_file_metadata_and_content(bucket_name: str, object_path: str) -> Dict[str, Any]:
+    """
+    Extract metadata and content from GCS file.
+    
+    Args:
+        bucket_name: GCS bucket name
+        object_path: Path to object in bucket
+        
+    Returns:
+        Dictionary with file metadata and extracted content
+    """
+    try:
+        storage_client = get_storage_client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(object_path)
+        
+        if not blob.exists():
+            raise ValueError(f"File not found: gs://{bucket_name}/{object_path}")
+        
+        # Reload to get fresh metadata
+        blob.reload()
+        
+        # Basic metadata
+        metadata = {
+            "file_name": os.path.basename(object_path),
+            "mime_type": blob.content_type,
+            "size_bytes": blob.size,
+            "created_at": blob.time_created.isoformat() if blob.time_created else None,
+            "md5_hash": blob.md5_hash,
+            "custom_metadata": blob.metadata or {}
+        }
+        
+        # Content extraction with size limit
+        max_size_bytes = CONFIG["MAX_FILE_SIZE_MB"] * 1024 * 1024
+        
+        if blob.size > max_size_bytes:
+            logger.warning(f"File too large for content extraction: {blob.size} bytes")
+            metadata.update({
+                "content_extracted": False,
+                "extraction_error": f"File too large (>{CONFIG['MAX_FILE_SIZE_MB']}MB)",
+                "content_hash": None,
+                "extracted_text": None
+            })
+        else:
+            # Download and process content
+            content_bytes = blob.download_as_bytes()
+            content_hash = calculate_content_hash(content_bytes)
+            
+            metadata["content_hash"] = content_hash
+            metadata["content_extracted"] = True
+            
+            # Basic text extraction (can be enhanced based on mime type)
+            try:
+                if blob.content_type and "text" in blob.content_type:
+                    extracted_text = content_bytes.decode('utf-8', errors='ignore')
+                    metadata["extracted_text"] = extracted_text[:10000]  # Limit preview
+                elif blob.content_type == "application/pdf":
+                    # TODO: Implement PDF text extraction
+                    metadata["extracted_text"] = "[PDF content - extraction not yet implemented]"
+                else:
+                    metadata["extracted_text"] = "[Binary content - no text extraction]"
+            except Exception as e:
+                logger.warning(f"Text extraction failed: {str(e)}")
+                metadata["extracted_text"] = f"[Text extraction failed: {str(e)}]"
+        
+        return metadata
+        
+    except Exception as e:
+        logger.error(f"Error extracting metadata: {str(e)}")
+        return {
+            "error": str(e),
+            "content_extracted": False,
+            "content_hash": None
+        }
+
+def check_duplicate_by_hash(content_hash: str, domain_id: str) -> Optional[Dict]:
+    """
+    Check if a file with the same content hash already exists.
+    
+    Args:
+        content_hash: SHA-256 hash of file content
+        domain_id: Domain UUID
+        
+    Returns:
+        Existing record if duplicate found, None otherwise
+    """
+    try:
+        if not content_hash:
+            return None
+            
+        supabase = get_supabase_client()
+        
+        result = supabase.table("domain_extracted_files")\
+            .select("*")\
+            .eq("content_hash", content_hash)\
+            .eq("domain_id", domain_id)\
+            .execute()
+        
+        if result.data and len(result.data) > 0:
+            return result.data[0]
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error checking duplicate: {str(e)}")
+        return None
+
+def create_database_record(
+    domain_id: str,
+    uploaded_by: str,
+    file_name: str, 
+    file_path: str,
+    bucket_path: str,
+    content_type: str,
+    metadata: Dict[str, Any]
+) -> Optional[Dict]:
+    """
+    Create a record in the domain_extracted_files table.
+    
+    Returns:
+        Created record or None if failed
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        record = {
+            "domain_id": domain_id,
+            "uploaded_by": uploaded_by,
+            "file_name": file_name,
+            "file_path": file_path,
+            "bucket_path": bucket_path,
+            "mime_type": metadata.get("mime_type"),
+            "size_bytes": metadata.get("size_bytes"),
+            "content_hash": metadata.get("content_hash"),
+            "extracted_text": metadata.get("extracted_text"),
+            "extracted_json": None,  # Can be populated later by processors
+            "metadata_json": {
+                "upload_timestamp": datetime.utcnow().isoformat(),
+                "original_metadata": metadata.get("custom_metadata", {}),
+                "extraction_metadata": {
+                    "content_extracted": metadata.get("content_extracted", False),
+                    "extraction_error": metadata.get("extraction_error")
+                }
+            },
+            "status": "pending",
+            "content_type": content_type
+        }
+        
+        result = supabase.table("domain_extracted_files").insert(record).execute()
+        
+        if result.data and len(result.data) > 0:
+            return result.data[0]
+        else:
+            logger.error("Failed to create database record - no data returned")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error creating database record: {str(e)}")
+        logger.error(traceback.format_exc())
+        return None
+
+def publish_processing_event(domain_id: str, record_id: str, content_type: str, bucket_name: str, object_path: str) -> Optional[str]:
+    """
+    Publish event to trigger downstream processing.
+    
+    Returns:
+        Message ID if successful, None otherwise
+    """
+    try:
+        publisher = get_publisher_client()
+        
+        # Topic name based on content type
+        topic_name = f"{content_type.replace('_', '-')}-processor-trigger"
+        topic_path = publisher.topic_path(CONFIG["GOOGLE_CLOUD_PROJECT"], topic_name)
+        
+        message_data = {
+            "record_id": record_id,
+            "domain_id": domain_id,
+            "content_type": content_type,
+            "bucket": bucket_name,
+            "path": object_path,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        future = publisher.publish(
+            topic_path,
+            json.dumps(message_data).encode('utf-8'),
+            domain_id=domain_id,
+            content_type=content_type,
+            record_id=record_id
+        )
+        
+        message_id = future.result()
+        logger.info(f"Published processing event: {message_id}")
+        return message_id
+        
+    except Exception as e:
+        logger.error(f"Error publishing processing event: {str(e)}")
+        return None
+
+def process_file_upload(upload_data: Dict) -> Dict[str, Any]:
+    """
+    Main file processing logic.
+    
+    Args:
+        upload_data: Dictionary containing upload information
+        
+    Returns:
+        Processing result dictionary
+    """
+    try:
+        # Extract required fields
+        domain_slug = upload_data.get("domain_slug")
+        content_type = upload_data.get("content_type", "concept")
+        uploaded_by = upload_data.get("uploaded_by")
+        file_name = upload_data.get("file_name")
+        source_bucket = upload_data.get("source_bucket")
+        source_path = upload_data.get("source_path")
+        
+        # Validate required fields
+        if not all([domain_slug, uploaded_by, file_name, source_bucket, source_path]):
+            return {
+                "success": False,
+                "error": "Missing required fields",
+                "required": ["domain_slug", "uploaded_by", "file_name", "source_bucket", "source_path"]
+            }
+        
+        # Validate content type
+        if content_type not in CONFIG["VALID_CONTENT_TYPES"]:
+            return {
+                "success": False,
+                "error": f"Invalid content_type. Must be one of: {CONFIG['VALID_CONTENT_TYPES']}"
+            }
+        
+        # Look up domain UUID
+        domain_id = get_domain_uuid(domain_slug)
+        if not domain_id:
+            return {
+                "success": False,
+                "error": f"Domain not found: {domain_slug}"
+            }
+        
+        # Determine target location
+        target_bucket, target_path = determine_target_bucket_and_path(domain_slug, content_type, file_name)
+        if not target_bucket or not target_path:
+            return {
+                "success": False,
+                "error": "Failed to determine target location"
+            }
+        
+        logger.info(f"Processing upload: {domain_slug}/{content_type}/{file_name}")
+        logger.info(f"Target: gs://{target_bucket}/{target_path}")
+        
+        # Copy file to target location
+        storage_client = get_storage_client()
+        
+        source_bucket_obj = storage_client.bucket(source_bucket)
+        source_blob = source_bucket_obj.blob(source_path)
+        
+        if not source_blob.exists():
+            return {
+                "success": False,
+                "error": f"Source file not found: gs://{source_bucket}/{source_path}"
+            }
+        
+        # Copy to target
+        target_bucket_obj = storage_client.bucket(target_bucket)
+        target_blob = target_bucket_obj.blob(target_path)
+        
+        # Perform copy
+        target_blob.upload_from_string(
+            source_blob.download_as_bytes(),
+            content_type=source_blob.content_type
+        )
+        
+        # Set metadata on target blob
+        target_blob.metadata = {
+            "domain_slug": domain_slug,
+            "content_type": content_type,
+            "uploaded_by": uploaded_by,
+            "original_name": file_name,
+            "upload_timestamp": datetime.utcnow().isoformat(),
+            "source_location": f"gs://{source_bucket}/{source_path}"
+        }
+        target_blob.patch()
+        
+        logger.info(f"File copied to gs://{target_bucket}/{target_path}")
+        
+        # Extract metadata and content
+        metadata = extract_file_metadata_and_content(target_bucket, target_path)
+        
+        # Check for duplicates if content hash available
+        duplicate_record = None
+        if metadata.get("content_hash"):
+            duplicate_record = check_duplicate_by_hash(metadata["content_hash"], domain_id)
+        
+        if duplicate_record:
+            logger.info(f"Duplicate detected: {duplicate_record['id']}")
+            return {
+                "success": True,
+                "duplicate": True,
+                "existing_record": duplicate_record,
+                "message": "File is a duplicate of existing content"
+            }
+        
+        # Create database record
+        db_record = create_database_record(
+            domain_id=domain_id,
+            uploaded_by=uploaded_by,
+            file_name=file_name,
+            file_path=f"gs://{target_bucket}/{target_path}",
+            bucket_path=target_path,
+            content_type=content_type,
+            metadata=metadata
+        )
+        
+        if not db_record:
+            return {
+                "success": False,
+                "error": "Failed to create database record"
+            }
+        
+        # Publish processing event
+        message_id = publish_processing_event(
+            domain_id=domain_id,
+            record_id=db_record["id"],
+            content_type=content_type,
+            bucket_name=target_bucket,
+            object_path=target_path
+        )
+        
+        return {
+            "success": True,
+            "duplicate": False,
+            "record": db_record,
+            "target_location": f"gs://{target_bucket}/{target_path}",
+            "content_hash": metadata.get("content_hash"),
+            "pubsub_message_id": message_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing file upload: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+# Flask Routes
+
+@app.route("/", methods=["GET"])
+def health_check():
+    """Health check endpoint."""
+    return jsonify({
+        "status": "healthy",
+        "service": "gemeos-preprocessor",
+        "version": "2.0",
+        "timestamp": datetime.utcnow().isoformat(),
+        "config": {
+            "project": CONFIG["GOOGLE_CLOUD_PROJECT"],
+            "domains": list(CONFIG["DOMAIN_BUCKETS"].keys()),
+            "content_types": CONFIG["VALID_CONTENT_TYPES"]
+        }
+    }), 200
+
+@app.route("/", methods=["POST"])  
+def handle_pubsub_message():
+    """Handle Pub/Sub messages for file processing."""
+    try:
+        envelope = request.get_json()
+        if not envelope or "message" not in envelope:
+            return jsonify({"error": "Invalid Pub/Sub message format"}), 400
+        
+        message = envelope["message"]
+        
+        # Decode message data
+        upload_data = {}
+        if "data" in message:
+            try:
+                data = base64.b64decode(message["data"]).decode("utf-8")
+                upload_data.update(json.loads(data))
+            except Exception as e:
+                logger.warning(f"Failed to decode message data: {e}")
+        
+        # Extract from attributes
+        attributes = message.get("attributes", {})
+        upload_data.update(attributes)
+        
+        result = process_file_upload(upload_data)
+        
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        logger.error(f"Error handling Pub/Sub message: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/process", methods=["POST"])
+def process_direct_upload():
+    """Handle direct API calls for file processing."""
+    try:
+        upload_data = request.get_json()
+        if not upload_data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        result = process_file_upload(upload_data)
+        
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        logger.error(f"Error processing direct upload: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/config", methods=["GET"])
+def get_configuration():
+    """Get service configuration."""
+    return jsonify({
+        "domains": CONFIG["DOMAIN_BUCKETS"],
+        "content_types": CONFIG["VALID_CONTENT_TYPES"],
+        "content_paths": CONFIG["CONTENT_PATHS"],
+        "max_file_size_mb": CONFIG["MAX_FILE_SIZE_MB"]
+    }), 200
+
+@app.route("/domains", methods=["GET"])
+def list_domains():
+    """List configured domains and content types."""
+    return jsonify({
+        "domains": CONFIG["DOMAIN_BUCKETS"],
+        "content_types": CONFIG["VALID_CONTENT_TYPES"],
+        "content_paths": CONFIG["CONTENT_PATHS"]
+    }), 200
+
+@app.route("/domains/<domain_slug>/files", methods=["GET"])
+def list_domain_files(domain_slug: str):
+    """List files for a specific domain."""
+    try:
+        domain_id = get_domain_uuid(domain_slug)
+        if not domain_id:
+            return jsonify({"error": f"Domain not found: {domain_slug}"}), 404
+        
+        # Query parameters
+        content_type = request.args.get("content_type")
+        status = request.args.get("status")
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        
+        supabase = get_supabase_client()
+        
+        # Build query
+        query = supabase.table("domain_extracted_files")\
+            .select("*")\
+            .eq("domain_id", domain_id)\
+            .order("created_at", desc=True)\
+            .range(offset, offset + limit - 1)
+        
+        if content_type:
+            query = query.eq("content_type", content_type)
+        if status:
+            query = query.eq("status", status)
+        
+        result = query.execute()
+        
+        return jsonify({
+            "files": result.data,
+            "count": len(result.data),
+            "domain_slug": domain_slug,
+            "domain_id": domain_id
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error listing domain files: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8080))
+    logger.info(f"Starting GEMEOS Preprocessor v2.0 on port {port}")
+    logger.info(f"Configuration: {json.dumps({k: v for k, v in CONFIG.items() if 'KEY' not in k}, indent=2)}")
+    app.run(host="0.0.0.0", port=port, debug=False)
