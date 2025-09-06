@@ -364,9 +364,10 @@ export class EnhancedTenantService {
           };
         });
 
-        const { error: inviteError } = await supabase
+        const { data: createdInvitations, error: inviteError } = await supabase
           .from('invitations')
-          .insert(invitations);
+          .insert(invitations)
+          .select('*');
 
         if (inviteError) throw inviteError;
         
@@ -407,8 +408,13 @@ export class EnhancedTenantService {
 
         console.log('🏗️ [QA-DB] Step 4: Sending invitation emails');
         // Send emails if requested
-        for (const invitation of wizardData.admins.invitations.filter(i => i.sendImmediately)) {
-          await this.sendInvitationEmail(tenant.id, invitation.email, invitation.role);
+        const invitationsToSend = wizardData.admins.invitations.filter(i => i.sendImmediately);
+        for (const invitationRequest of invitationsToSend) {
+          // Find the corresponding created invitation by email
+          const createdInvitation = createdInvitations?.find(ci => ci.email === invitationRequest.email);
+          if (createdInvitation) {
+            await this.sendInvitationEmail(tenant.id, createdInvitation);
+          }
         }
         
         console.log('✅ [QA-DB] Step 4 completed: Invitation emails sent');
@@ -661,13 +667,13 @@ export class EnhancedTenantService {
    */
   private async sendInvitationEmail(
     tenantId: string,
-    email: string,
-    role: string
+    invitation: any // Invitation record from database
   ) {
     console.log(`📧 [QA-EMAIL] Preparing to send invitation email:`, {
-      email,
-      role,
-      tenantId
+      email: invitation.email,
+      role: invitation.role_name,
+      tenantId,
+      invitationId: invitation.id
     });
 
     try {
@@ -686,25 +692,41 @@ export class EnhancedTenantService {
       // Import email service
       const { emailService } = await import('@/services/email.service');
       
-      // Send tenant admin invitation
-      const result = await emailService.sendTenantAdminInvitation(
-        email,
-        tenantId,
-        tenant.name,
-        tenant.slug,
-        'Platform Administrator'
-      );
-
-      if (!result.success) {
-        console.error('❌ [QA-EMAIL] Email sending failed:', result);
-        throw new Error(`Failed to send invitation email: ${result.error || 'Unknown error'}`);
-      }
-
-      console.log('✅ [QA-EMAIL] Invitation email sent successfully:', {
-        email,
-        tenantName: tenant.name,
-        queueId: result.queueId
+      // Use the invitation template with proper template variables
+      const queueId = await emailService.queueEmailForTenant(tenantId, {
+        templateType: 'invitation',
+        to: invitation.email,
+        templateVariables: {
+          invitation_id: invitation.id,
+          tenant_name: tenant.name,
+          tenant_slug: tenant.slug,
+          tenant_id: tenantId,
+          inviter_name: 'Platform Administrator',
+          role_name: invitation.role_name,
+          expires_at: new Date(invitation.expires_at).toLocaleDateString(),
+          support_email: 'support@gemeos.ai',
+        },
+        priority: 'high',
+        relatedEntityType: 'tenant',
+        relatedEntityId: tenantId,
       });
+
+      if (queueId) {
+        // Process the queued email immediately using private method access
+        const processMethod = (emailService as any)['processQueueItemForTenant'];
+        if (processMethod) {
+          await processMethod.call(emailService, queueId, tenantId);
+        }
+        
+        console.log('✅ [QA-EMAIL] Invitation email sent successfully:', {
+          email: invitation.email,
+          tenantName: tenant.name,
+          queueId: queueId,
+          invitationId: invitation.id
+        });
+      } else {
+        throw new Error('Failed to queue invitation email');
+      }
 
     } catch (error) {
       console.error('❌ [QA-EMAIL] Error in sendInvitationEmail:', {
@@ -712,8 +734,8 @@ export class EnhancedTenantService {
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
         errorStack: error instanceof Error ? error.stack : undefined,
         tenantId,
-        email,
-        role
+        email: invitation.email,
+        invitationId: invitation.id
       });
       // Don't throw the error to prevent tenant creation failure
       // Log the error but continue with tenant creation
