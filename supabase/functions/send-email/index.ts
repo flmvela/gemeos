@@ -217,7 +217,7 @@ serve(async (req) => {
       supabaseUrl: supabaseUrl.substring(0, 30) + '...'
     });
     
-    const baseUrl = isDevelopment ? 'http://localhost:8080' : 'https://app.gemeos.ai';
+    const baseUrl = isDevelopment ? 'http://localhost:8082' : 'https://app.gemeos.ai';
     console.log('🔍 [ENV] Using baseUrl:', baseUrl);
     
     // Create template variables with defaults

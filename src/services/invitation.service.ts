@@ -83,7 +83,7 @@ class InvitationService {
 
     // Get role ID
     const { data: role, error: roleError } = await supabase
-      .from('roles')
+      .from('user_roles')
       .select('id')
       .eq('name', data.role)
       .single();
@@ -111,7 +111,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        role:roles(id, name, display_name)
+        role:user_roles(id, name, display_name)
       `)
       .single();
 
@@ -167,7 +167,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        role:roles(id, name, display_name)
+        role:user_roles(id, name, display_name)
       `)
       .order('created_at', { ascending: false });
 
@@ -202,7 +202,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        role:roles(id, name, display_name)
+        role:user_roles(id, name, display_name)
       `)
       .eq('id', invitationId)
       .single();
@@ -274,7 +274,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        role:roles(id, name, display_name)
+        role:user_roles(id, name, display_name)
       `)
       .eq('tenant_id', tenantId)
       .eq('status', 'pending')
@@ -322,7 +322,7 @@ class InvitationService {
       .insert({
         user_id: userId,
         tenant_id: invitation.tenant_id,
-        role_id: invitation.role?.id,
+        role_id: invitation.role_id,
         status: 'active' as UserTenantStatus,
         is_primary: false,
         joined_at: new Date().toISOString(),
@@ -384,7 +384,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        role:roles(id, name, display_name)
+        role:user_roles(id, name, display_name)
       `)
       .single();
 
@@ -415,7 +415,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        role:roles(id, name, display_name)
+        role:user_roles(id, name, display_name)
       `)
       .eq('invited_by', userId)
       .order('created_at', { ascending: false });

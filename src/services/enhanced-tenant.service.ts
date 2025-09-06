@@ -304,6 +304,18 @@ export class EnhancedTenantService {
         tenantSlug: tenant.slug
       });
 
+      // ✅ Grant the creator access to the new tenant via secure RPC (bypasses RLS safely)
+      const { error: addCreatorErr } = await supabase.rpc('add_creator_to_tenant', {
+        p_tenant_id: tenant.id,
+        p_role_name: 'tenant_admin'
+      });
+
+      if (addCreatorErr) {
+        console.error('⚠️ [QA-DB] add_creator_to_tenant failed:', addCreatorErr);
+      } else {
+        console.log('✅ [QA-DB] Creator added to tenant via RPC');
+      }
+
       console.log('🏗️ [QA-DB] Step 2: Creating domain assignments');
       // Assign domains if any selected
       if (wizardData.domains.selectedDomainIds.length > 0) {
@@ -339,7 +351,7 @@ export class EnhancedTenantService {
       if (wizardData.admins.invitations.length > 0) {
         // First, look up role IDs
         const { data: roles, error: rolesError } = await supabase
-          .from('roles')
+          .from('user_roles')
           .select('id, name')
           .in('name', wizardData.admins.invitations.map(inv => inv.role));
 
@@ -376,35 +388,8 @@ export class EnhancedTenantService {
           emails: wizardData.admins.invitations.map(inv => inv.email)
         });
 
-        // Step 3.5: Grant the creating user access to the new tenant so they can send emails
-        console.log('🏗️ [QA-DB] Step 3.5: Granting creator access to new tenant');
-        if (session?.user?.id) {
-          // Get tenant_admin role ID (safer fallback than platform_admin)
-          const { data: taRole, error: taRoleErr } = await (supabase as any)
-            .from('roles')
-            .select('id')
-            .eq('name', 'tenant_admin')
-            .maybeSingle();
-
-          if (taRole?.id) {
-            const { error: utErr } = await (supabase as any)
-              .from('user_tenants')
-              .insert({
-                user_id: session.user.id,
-                tenant_id: tenant.id,
-                role_id: taRole.id,
-                status: 'active'
-              });
-
-            if (utErr) {
-              console.error('❌ [QA-DB] could not insert creator membership', utErr);
-            } else {
-              console.log('✅ [QA-DB] creator membership added');
-            }
-          } else {
-            console.warn('⚠️ [QA-DB] tenant_admin role not found; creator membership not added');
-          }
-        }
+        // Step 3.5: Creator access already granted via secure RPC in Step 1
+        // (Removed direct user_tenants manipulation for security)
 
         console.log('🏗️ [QA-DB] Step 4: Sending invitation emails');
         // Send emails if requested
