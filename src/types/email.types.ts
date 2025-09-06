@@ -5,6 +5,7 @@
 export type EmailTemplateType = 
   | 'teacher_invitation'
   | 'tenant_admin_invitation'
+  | 'invitation'
   | 'password_reset'
   | 'welcome'
   | 'account_suspended'

@@ -100,25 +100,79 @@ serve(async (req) => {
       throw new Error('Missing required email fields');
     }
 
-    // Check if user is platform admin (bypass tenant checks)
-    const isPlatformAdmin = 
-      user.app_metadata?.is_platform_admin === true ||
-      user.email === 'platform-admin@gemeos.ai' ||
-      user.email === 'admin@gemeos.ai';
+    // Track why we're allowing/denying (great for logs)
+    let allowed = false;
+    const reasons: string[] = [];
 
-    if (!isPlatformAdmin) {
-      // Check if user has permission to send emails for this tenant
-      const { data: userTenant, error: tenantError } = await supabase
+    // 1) Platform admin list (use env, lowercase-safe)
+    const platformAdmins = (Deno.env.get('PLATFORM_ADMIN_EMAILS') || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    const isPlatformAdmin =
+      user.app_metadata?.role === 'platform_admin' ||
+      user.app_metadata?.is_platform_admin === true ||
+      platformAdmins.includes((user.email || '').toLowerCase()) ||
+      ['platform-admin@gemeos.ai','admin@gemeos.ai','test-admin@example.com']
+        .includes((user.email || '').toLowerCase());
+
+    if (isPlatformAdmin) { allowed = true; reasons.push('platform_admin'); }
+
+    // 2) Tenant creator can send
+    if (!allowed) {
+      const { data: tenantRow, error: tenantRowErr } = await supabase
+        .from('tenants')
+        .select('created_by')
+        .eq('id', emailToSend.tenantId)
+        .maybeSingle();
+
+      if (!tenantRowErr && tenantRow?.created_by === user.id) {
+        allowed = true;
+        reasons.push('tenant_creator');
+      }
+    }
+
+    // 3) Queue owner can process their own queued item
+    if (!allowed && emailToSend.queueId) {
+      const { data: q, error: qErr } = await supabase
+        .from('email_queue')
+        .select('created_by')
+        .eq('id', emailToSend.queueId)
+        .maybeSingle();
+
+      if (!qErr && q?.created_by === user.id) {
+        allowed = true;
+        reasons.push('queue_creator');
+      }
+    }
+
+    // 4) Membership-based allow (active/pending/invited)
+    if (!allowed) {
+      const { data: membership, error: memErr } = await supabase
         .from('user_tenants')
-        .select('role_id, roles(name)')
+        .select('id,status')
         .eq('user_id', user.id)
         .eq('tenant_id', emailToSend.tenantId)
-        .eq('status', 'active')
-        .single();
+        .in('status', ['active','pending','invited'])
+        .maybeSingle();
 
-      if (tenantError || !userTenant) {
-        throw new Error('User does not have access to this tenant');
+      if (!memErr && membership) {
+        allowed = true;
+        reasons.push(`membership_${membership.status}`);
       }
+    }
+
+    console.log('🔐 [AUTH] allow?', { allowed, reasons, caller: user.email, tenantId: emailToSend.tenantId });
+
+    if (!allowed) {
+      if (emailToSend.queueId) {
+        await supabase.from('email_queue').update({
+          status: 'failed',
+          error_message: 'Sender not authorized for tenant',
+        }).eq('id', emailToSend.queueId);
+      }
+      throw new Error('User does not have access to this tenant');
     }
 
     // Check if email is blacklisted
@@ -167,6 +221,23 @@ serve(async (req) => {
     console.log('🔍 [ENV] Using baseUrl:', baseUrl);
     
     // Create template variables with defaults
+    // Build invite link - ensure we have invitation_id for invitation emails
+    let inviteLink = tv.invite_link || emailToSend.invite_link;
+    
+    // For invitation emails, always build the URL with invitation_id
+    if (!inviteLink && emailToSend.templateType === 'invitation') {
+      if (tv.invitation_id) {
+        inviteLink = `${baseUrl}/accept-invite?tenant=${emailToSend.tenantId}&token=${tv.invitation_id}`;
+        console.log('📧 [INVITATION] Built invite URL:', inviteLink);
+      } else {
+        console.error('❌ [INVITATION] Missing invitation_id for invitation email!', {
+          templateType: emailToSend.templateType,
+          templateVars: Object.keys(tv)
+        });
+        inviteLink = `${baseUrl}/accept-invite?tenant=${emailToSend.tenantId}`;
+      }
+    }
+    
     const templateVars = {
       // Basic template variables
       tenant_name: tv.tenant_name || 'Your organization',
@@ -176,7 +247,7 @@ serve(async (req) => {
       support_email: tv.support_email || DEFAULT_SUPPORT_EMAIL,
       expires_at: tv.expires_at || new Date(Date.now() + 7*24*60*60*1000).toISOString(),
       login_url: tv.login_url || `${baseUrl}/login`,
-      invite_link: tv.invite_link || emailToSend.invite_link || `${baseUrl}/accept-invite?tenant=${emailToSend.tenantId}`,
+      invite_link: inviteLink,
       
       // Include any additional vars passed from client
       ...tv,

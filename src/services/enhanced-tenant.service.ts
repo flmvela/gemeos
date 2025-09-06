@@ -375,6 +375,36 @@ export class EnhancedTenantService {
           emails: wizardData.admins.invitations.map(inv => inv.email)
         });
 
+        // Step 3.5: Grant the creating user access to the new tenant so they can send emails
+        console.log('🏗️ [QA-DB] Step 3.5: Granting creator access to new tenant');
+        if (session?.user?.id) {
+          // Get tenant_admin role ID (safer fallback than platform_admin)
+          const { data: taRole, error: taRoleErr } = await (supabase as any)
+            .from('roles')
+            .select('id')
+            .eq('name', 'tenant_admin')
+            .maybeSingle();
+
+          if (taRole?.id) {
+            const { error: utErr } = await (supabase as any)
+              .from('user_tenants')
+              .insert({
+                user_id: session.user.id,
+                tenant_id: tenant.id,
+                role_id: taRole.id,
+                status: 'active'
+              });
+
+            if (utErr) {
+              console.error('❌ [QA-DB] could not insert creator membership', utErr);
+            } else {
+              console.log('✅ [QA-DB] creator membership added');
+            }
+          } else {
+            console.warn('⚠️ [QA-DB] tenant_admin role not found; creator membership not added');
+          }
+        }
+
         console.log('🏗️ [QA-DB] Step 4: Sending invitation emails');
         // Send emails if requested
         for (const invitation of wizardData.admins.invitations.filter(i => i.sendImmediately)) {
@@ -653,8 +683,8 @@ export class EnhancedTenantService {
         throw new Error('Failed to fetch tenant information for email');
       }
 
-      // Import email service dynamically to avoid circular dependencies
-      const { emailService } = await import('./email.service');
+      // Import email service
+      const { emailService } = await import('@/services/email.service');
       
       // Send tenant admin invitation
       const result = await emailService.sendTenantAdminInvitation(

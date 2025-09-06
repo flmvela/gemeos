@@ -5,6 +5,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import type { SystemRole, UserTenantStatus } from '@/types/auth.types';
+import { emailService } from '@/services/email.service';
 
 export interface Invitation {
   id: string;
@@ -22,10 +23,6 @@ export interface Invitation {
     id: string;
     name: string;
     slug: string;
-  };
-  invited_by_user?: {
-    id: string;
-    email: string;
   };
   role?: {
     id: string;
@@ -86,7 +83,7 @@ class InvitationService {
 
     // Get role ID
     const { data: role, error: roleError } = await supabase
-      .from('user_roles')
+      .from('roles')
       .select('id')
       .eq('name', data.role)
       .single();
@@ -114,14 +111,48 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        invited_by_user:profiles!invitations_invited_by_fkey(id, email),
-        role:user_roles(id, name, display_name)
+        role:roles(id, name, display_name)
       `)
       .single();
 
     if (error) {
       console.error('Error creating invitation:', error);
       throw new Error(`Failed to create invitation: ${error.message}`);
+    }
+
+    // Debug invitation data
+    console.log('🔍 [INVITATION] Invitation created successfully:', {
+      id: invitation.id,
+      email: invitation.email,
+      tenant: invitation.tenant,
+      role: invitation.role,
+      hasEmailService: !!emailService
+    });
+
+    // Send invitation email
+    try {
+      const templateVars = {
+        invitation_id: invitation.id,
+        tenant_name: invitation.tenant?.name || 'Organization',
+        tenant_slug: invitation.tenant?.slug || 'org',
+        tenant_id: data.tenant_id,
+        inviter_name: 'Administrator',
+        role_name: invitation.role?.display_name || data.role,
+        expires_at: expiresAt.toLocaleDateString(),
+        support_email: 'support@gemeos.ai',
+      };
+      
+      console.log('🔍 [INVITATION] Email template variables:', templateVars);
+      
+      await emailService.queueEmailForTenant(data.tenant_id, {
+        templateType: 'invitation',
+        to: data.email,
+        templateVariables: templateVars,
+        priority: 'high',
+      });
+    } catch (emailError) {
+      console.error('Error sending invitation email:', emailError);
+      // Don't throw here - invitation was created successfully, email is secondary
     }
 
     return invitation as Invitation;
@@ -136,8 +167,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        invited_by_user:profiles!invitations_invited_by_fkey(id, email),
-        role:user_roles(id, name, display_name)
+        role:roles(id, name, display_name)
       `)
       .order('created_at', { ascending: false });
 
@@ -172,8 +202,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        invited_by_user:profiles!invitations_invited_by_fkey(id, email),
-        role:user_roles(id, name, display_name)
+        role:roles(id, name, display_name)
       `)
       .eq('id', invitationId)
       .single();
@@ -195,6 +224,72 @@ class InvitationService {
   async getInvitationByToken(token: string): Promise<Invitation | null> {
     // For now, use ID as token. In production, implement proper token generation
     return this.getInvitation(token);
+  }
+
+  /**
+   * Get pending invitation by tenant ID or slug (fallback for old email links)
+   */
+  async getPendingInvitationByTenant(tenantIdOrSlug: string): Promise<Invitation | null> {
+    console.log('🔍 Looking for pending invitations for tenant:', tenantIdOrSlug);
+    
+    // First try to get tenant by ID or slug
+    let tenantId = tenantIdOrSlug;
+    
+    // Check if it's a UUID (tenant_id) or a slug
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenantIdOrSlug);
+    
+    if (!isUUID) {
+      // It's likely a slug, so get the tenant ID
+      const { data: tenant, error: tenantError } = await supabase
+        .from('tenants')
+        .select('id')
+        .eq('slug', tenantIdOrSlug)
+        .single();
+        
+      if (tenantError || !tenant) {
+        console.log('🔍 Could not find tenant by slug:', tenantIdOrSlug);
+        return null;
+      }
+      
+      tenantId = tenant.id;
+      console.log('🔍 Resolved tenant slug to ID:', tenantId);
+    }
+    
+    // First, let's see what invitations exist for this tenant (any status)
+    const { data: allInvitations, error: allError } = await supabase
+      .from('invitations')
+      .select('id, email, status, expires_at, created_at')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+    
+    if (allError) {
+      console.error('❌ Error fetching all invitations:', allError);
+    } else {
+      console.log('🔍 All invitations for tenant:', allInvitations);
+    }
+    
+    // Now try to find pending, non-expired ones with full relation data
+    const { data, error } = await supabase
+      .from('invitations')
+      .select(`
+        *,
+        tenant:tenants(id, name, slug),
+        role:roles(id, name, display_name)
+      `)
+      .eq('tenant_id', tenantId)
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString()) // Not expired
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('❌ Error fetching invitation by tenant:', error);
+      return null;
+    }
+
+    console.log('🔍 Pending invitation query result:', data ? `Found invitation ${data.id}` : 'No matching pending invitations');
+    return data as Invitation | null;
   }
 
   /**
@@ -289,8 +384,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        invited_by_user:profiles!invitations_invited_by_fkey(id, email),
-        role:user_roles(id, name, display_name)
+        role:roles(id, name, display_name)
       `)
       .single();
 
@@ -321,8 +415,7 @@ class InvitationService {
       .select(`
         *,
         tenant:tenants(id, name, slug),
-        invited_by_user:profiles!invitations_invited_by_fkey(id, email),
-        role:user_roles(id, name, display_name)
+        role:roles(id, name, display_name)
       `)
       .eq('invited_by', userId)
       .order('created_at', { ascending: false });

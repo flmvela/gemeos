@@ -32,6 +32,7 @@ import Auth from "./pages/Auth";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
+import AcceptInvitation from "./pages/AcceptInvitation";
 import AdminDashboard from "./pages/AdminDashboard";
 import DomainAdmin from "./pages/DomainAdmin";
 import { TenantAdminPage } from "./pages/TenantAdmin";
@@ -58,6 +59,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/accept-invite" element={<AcceptInvitation />} />
           <Route path="/teacher/*" element={
             <TeacherLayout>
               <Routes>
