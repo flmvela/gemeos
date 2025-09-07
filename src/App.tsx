@@ -25,6 +25,8 @@ import Unauthorized from "./pages/Unauthorized";
 import NotFound from "./pages/NotFound";
 import AdminAITraining from "./pages/AdminAITraining";
 import ConceptDetailPage from "./pages/ConceptDetailPage";
+import { PermissionManagement } from "./pages/admin/PermissionManagement";
+import { RBACManagement } from "./pages/admin/RBACManagement";
 import { TeacherLayout } from "./components/TeacherLayout";
 import { RouteProtection } from "./components/auth/RouteProtection";
 import { BreadcrumbProvider } from "./components/navigation/BreadcrumbProvider";
@@ -34,6 +36,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import AcceptInvitation from "./pages/AcceptInvitation";
 import AdminDashboard from "./pages/AdminDashboard";
+import DomainsDashboard from "./pages/DomainsDashboard";
 import DomainAdmin from "./pages/DomainAdmin";
 import { TenantAdminPage } from "./pages/TenantAdmin";
 import AccessManagement from "./pages/AccessManagement";
@@ -134,11 +137,54 @@ const App = () => (
                     <AdminDashboard />
                   </RouteProtection>
                 } />
+                <Route path="domains/dashboard" element={
+                  <RouteProtection>
+                    <DomainsDashboard />
+                  </RouteProtection>
+                } />
                 <Route path="domain/domain_old" element={
                   <RouteProtection>
                     <DomainDetail />
                   </RouteProtection>
                 } />
+                {/* New slug-based routes */}
+                <Route path="domains/:slug" element={
+                  <RouteProtection>
+                    <DomainAdmin />
+                  </RouteProtection>
+                } />
+                <Route path="domains/:slug/concepts" element={
+                  <RouteProtection>
+                    <DomainConcepts />
+                  </RouteProtection>
+                } />
+                <Route path="domains/:slug/concepts/:conceptId" element={
+                  <RouteProtection>
+                    <ConceptDetailPage />
+                  </RouteProtection>
+                } />
+                <Route path="domains/:slug/goals" element={
+                    <RouteProtection>
+                      <LearningGoalsPage />
+                    </RouteProtection>
+                  } />
+                <Route path="domains/:slug/ai-guidance" element={
+                  <RouteProtection>
+                    <DomainAIGuidance />
+                  </RouteProtection>
+                } />
+                <Route path="domains/:slug/ai-guidance/:area" element={
+                  <RouteProtection>
+                    <DomainGuidanceEditor />
+                  </RouteProtection>
+                } />
+                <Route path="domains/:slug/ai-guidance/:area/examples/new" element={
+                  <RouteProtection>
+                    <AddExamplesPage />
+                  </RouteProtection>
+                } />
+                
+                {/* Legacy routes for backward compatibility */}
                 <Route path="domain/:domainId" element={
                   <RouteProtection>
                     <DomainAdmin />
@@ -202,6 +248,21 @@ const App = () => (
                 <Route path="settings/feedback" element={
                   <RouteProtection>
                     <FeedbackSettings />
+                  </RouteProtection>
+                } />
+                <Route path="rbac-permissions" element={
+                  <RouteProtection>
+                    <PermissionManagement />
+                  </RouteProtection>
+                } />
+                <Route path="permissions" element={
+                  <RouteProtection>
+                    <RBACManagement />
+                  </RouteProtection>
+                } />
+                <Route path="rbac-management" element={
+                  <RouteProtection>
+                    <RBACManagement />
                   </RouteProtection>
                 } />
                 <Route path="access-management" element={

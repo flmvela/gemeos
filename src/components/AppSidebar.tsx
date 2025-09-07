@@ -94,30 +94,26 @@ const dashboardItems = [
   { title: "Admin Dashboard", url: "/admin/dashboard", icon: Monitor },
 ]
 
-const contentManagementItems = [
-  { title: "Domain Concepts", url: "/admin/domain/472a6e02-8733-431a-bb76-5d517767cab7/concepts", icon: Brain },
-  { title: "Domain Administration", url: "/admin/domain/472a6e02-8733-431a-bb76-5d517767cab7", icon: Settings },
+const adminDashboardManagementItems = [
+  { title: "Admin Dashboard", url: "/admin/dashboard", icon: Monitor },
+  { title: "Tenants", url: "/admin/tenants", icon: Building2 },
+  { title: "Teachers", url: "/admin/teachers", icon: Users },
+  { title: "Classes", url: "/teacher/classes/create", icon: BookOpen },
+  { title: "Students", url: "/admin/students", icon: GraduationCap },
 ]
 
-const userManagementItems = [
-  { title: "Tenants", url: "/admin/tenants", icon: Building2 },
-  { 
-    title: "Teachers", 
-    url: "/admin/teachers", 
-    icon: Users,
-    subItems: [
-      { title: "Teacher Management", url: "/admin/teachers", icon: Users },
-      { title: "Create Class", url: "/teacher/classes/create", icon: Plus }
-    ]
-  },
-  { title: "Invitations", url: "/admin/invitations", icon: UserCheck },
-  { title: "Clients", url: "/admin/clients", icon: Building2 },
+const domainManagementItems = [
+  { title: "Domain Administration", url: "/admin/domains/dashboard", icon: Settings },
+  { title: "Learning Goals", url: "/admin/domains/jazz-music/goals", icon: Target },
+  { title: "AI Guidance", url: "/admin/domains/jazz-music/ai-guidance", icon: Brain },
+  { title: "Guidance Editor", url: "/admin/domains/jazz-music/ai-guidance/content", icon: FileText },
+  { title: "Examples", url: "/admin/domains/jazz-music/ai-guidance/content/examples/new", icon: Plus },
 ]
 
 const systemItems = [
+  { title: "Access control", url: "/admin/rbac-management", icon: UserCheck },
   { title: "Access Management", url: "/admin/access-management", icon: Shield },
-  { title: "AI Training", url: "/admin/ai-training", icon: Brain },
-  { title: "Settings", url: "/admin/settings", icon: Settings },
+  { title: "AI Settings", url: "/admin/ai-training", icon: Brain },
   { title: "Feedback Settings", url: "/admin/settings/feedback", icon: Brain },
   { title: "File Upload", url: "/admin/upload", icon: Upload },
 ]
@@ -149,9 +145,6 @@ export function AppSidebar() {
     currentPath.startsWith('/teacher/administration')
   )
   const [isPagesExpanded, setIsPagesExpanded] = useState(false)
-  const [isTeachersExpanded, setIsTeachersExpanded] = useState(
-    currentPath.startsWith('/teacher/classes/create') || currentPath.startsWith('/admin/teachers')
-  )
   const { data: accessiblePaths = [] } = useUserAccessiblePaths()
   const { isPlatformAdmin } = useAuth()
   
@@ -221,13 +214,13 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Content Management - Admin Only */}
+        {/* Admin Dashboard & Management - Admin Only */}
         {isAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>Content Management</SidebarGroupLabel>
+            <SidebarGroupLabel>Admin & Management</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {contentManagementItems
+                {adminDashboardManagementItems
                   .filter(item => isValidPage(item.url))
                   .map((item) => (
                     <SidebarMenuItem key={item.title}>
@@ -247,61 +240,25 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* User Management - Admin Only */}
+        {/* Domain Management - Admin Only */}
         {isAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>User Management</SidebarGroupLabel>
+            <SidebarGroupLabel>Domain Management</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {userManagementItems
+                {domainManagementItems
                   .filter(item => isValidPage(item.url))
                   .map((item) => (
                     <SidebarMenuItem key={item.title}>
-                      {item.subItems ? (
-                        <>
-                          <SidebarMenuButton 
-                            tooltip={item.title}
-                            onClick={() => {
-                              if (item.title === 'Teachers') {
-                                setIsTeachersExpanded(!isTeachersExpanded);
-                              }
-                            }}
-                          >
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                            <ChevronRight className={`ml-auto h-4 w-4 transition-transform ${
-                              item.title === 'Teachers' && isTeachersExpanded ? 'rotate-90' : ''
-                            }`} />
-                          </SidebarMenuButton>
-                          {((item.title === 'Teachers' && isTeachersExpanded)) && (
-                            <SidebarMenuSub>
-                              {item.subItems.map((subItem) => (
-                                <SidebarMenuSubItem key={subItem.title}>
-                                  <SidebarMenuSubButton asChild>
-                                    <NavLink 
-                                      to={subItem.url} 
-                                      className={getNavClassName(subItem.url)}
-                                    >
-                                      <subItem.icon className="h-4 w-4" />
-                                      <span>{subItem.title}</span>
-                                    </NavLink>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              ))}
-                            </SidebarMenuSub>
-                          )}
-                        </>
-                      ) : (
-                        <SidebarMenuButton asChild tooltip={item.title}>
-                          <NavLink 
-                            to={item.url} 
-                            className={getNavClassName(item.url)}
-                          >
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </NavLink>
-                        </SidebarMenuButton>
-                      )}
+                      <SidebarMenuButton asChild tooltip={item.title}>
+                        <NavLink 
+                          to={item.url} 
+                          className={getNavClassName(item.url)}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
               </SidebarMenu>
