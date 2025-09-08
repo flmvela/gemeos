@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 export const UserDropdown = () => {
-  const { session, loading } = useAuth();
+  const { session, loading, isPlatformAdmin } = useAuth();
 
   if (loading) {
     return (
@@ -31,13 +31,29 @@ export const UserDropdown = () => {
   };
 
   const getInitials = () => {
-    if (userName) {
-      return userName.split(' ').map(n => n[0]).join('').toUpperCase();
+    if (isPlatformAdmin) {
+      // Platform Admin: Show first letters of first and last name, or first letter of email
+      const email = userEmail || '';
+      const emailParts = email.split('@')[0]; // Get part before @
+      const nameParts = emailParts.split(/[._-]/); // Split by common email separators
+      
+      if (nameParts.length >= 2) {
+        // If we have multiple parts, use first letter of first and last
+        return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+      } else {
+        // Fallback to first letter of email
+        return email[0]?.toUpperCase() || 'PA';
+      }
+    } else {
+      // Tenant User: Show tenant name initials
+      if (userName) {
+        return userName.split(' ').map(n => n[0]).join('').toUpperCase();
+      }
+      if (userEmail) {
+        return userEmail[0].toUpperCase();
+      }
+      return 'U';
     }
-    if (userEmail) {
-      return userEmail[0].toUpperCase();
-    }
-    return 'U';
   };
 
   const displayName = userName || userEmail || 'User';

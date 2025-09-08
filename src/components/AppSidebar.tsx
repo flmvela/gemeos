@@ -1,6 +1,6 @@
 import { Calendar, Settings, Users, BookOpen, Music, GraduationCap, ChevronRight, Upload, Building2, Shield, Home, FileText, Target, Brain, Monitor, UserCheck, Globe, Plus, Menu, X } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useUserAccessiblePaths } from "@/hooks/usePagePermissions"
 import { useAuth } from "@/hooks/useAuth"
 
@@ -23,11 +23,6 @@ import {
 } from "@/components/ui/sidebar"
 
 const navigationItems = [
-  {
-    title: "Dashboard",
-    url: "/teacher/dashboard",
-    icon: Calendar,
-  },
   {
     title: "Domain Selection",
     url: "/teacher/domain-selection", 
@@ -65,8 +60,13 @@ const administrationItems = [
 
 const adminItems = [
   {
-    title: "Dashboard",
+    title: "Platform Admin Dashboard",
     url: "/admin/dashboard",
+    icon: Monitor,
+  },
+  {
+    title: "Tenant Dashboard",
+    url: "/admin/tenant-dashboard",
     icon: Calendar,
   },
   {
@@ -91,13 +91,15 @@ const adminItems = [
   },
 ]
 
-// Comprehensive admin navigation based on UX analysis
+// Dashboard items - all dashboards consolidated
 const dashboardItems = [
-  { title: "Admin Dashboard", url: "/admin/dashboard", icon: Monitor },
+  { title: "Platform Admin Dashboard", url: "/admin/dashboard", icon: Monitor },
+  { title: "Tenant Dashboard", url: "/admin/tenant-dashboard", icon: Calendar },
+  { title: "Teacher Dashboard", url: "/teacher/dashboard", icon: GraduationCap },
+  { title: "Student Dashboard", url: "/student/dashboard", icon: Users },
 ]
 
 const adminDashboardManagementItems = [
-  { title: "Admin Dashboard", url: "/admin/dashboard", icon: Monitor },
   { title: "Tenants", url: "/admin/tenants", icon: Building2 },
   { title: "Teachers", url: "/admin/teachers", icon: Users },
   { title: "Classes", url: "/teacher/classes/create", icon: BookOpen },
@@ -139,6 +141,69 @@ const quickAccessPages = [
   { title: "Unauthorized", url: "/unauthorized", icon: Shield },
 ]
 
+// Flyout Panel Component
+interface FlyoutItem {
+  title: string
+  url: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+const FlyoutPanel = ({ 
+  items, 
+  title, 
+  icon: Icon, 
+  isVisible, 
+  onMouseEnter, 
+  onMouseLeave,
+  isValidPage 
+}: {
+  items: FlyoutItem[]
+  title: string
+  icon: React.ComponentType<{ className?: string }>
+  isVisible: boolean
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+  isValidPage: (url: string) => boolean
+}) => {
+  if (!isVisible) return null
+
+  return (
+    <div 
+      className="absolute left-full ml-2 top-0 z-50 min-w-[240px] max-w-[280px] bg-[#1a1b3a] border border-gray-700 rounded-lg shadow-xl opacity-100 visible transition-all duration-200 ease-out transform origin-left"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* Flyout Header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-700 text-white font-medium">
+        <Icon className="h-4 w-4" />
+        <span>{title}</span>
+      </div>
+      
+      {/* Flyout Items */}
+      <div className="py-2">
+        {items
+          .filter(item => isValidPage(item.url))
+          .map((item) => (
+            <NavLink
+              key={item.title}
+              to={item.url}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-2 text-sm transition-colors ${
+                  isActive 
+                    ? 'bg-white/15 text-white font-medium' 
+                    : 'text-gray-300 hover:text-white hover:bg-white/10'
+                }`
+              }
+            >
+              <item.icon className="h-4 w-4" />
+              <span>{item.title}</span>
+            </NavLink>
+          ))}
+      </div>
+    </div>
+  )
+}
+
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar()
   const location = useLocation()
@@ -149,8 +214,13 @@ export function AppSidebar() {
   const [isPagesExpanded, setIsPagesExpanded] = useState(false)
   
   // Collapsible state for admin sections
+  const [isDashboardExpanded, setIsDashboardExpanded] = useState(
+    currentPath.startsWith('/admin/dashboard') ||
+    currentPath.startsWith('/admin/tenant-dashboard') ||
+    currentPath.startsWith('/teacher/dashboard') ||
+    currentPath.startsWith('/student/dashboard')
+  )
   const [isAdminManagementExpanded, setIsAdminManagementExpanded] = useState(
-    currentPath.startsWith('/admin/dashboard') || 
     currentPath.startsWith('/admin/tenants') || 
     currentPath.startsWith('/admin/teachers') || 
     currentPath.startsWith('/admin/students')
@@ -168,11 +238,58 @@ export function AppSidebar() {
   const [isAuthPagesExpanded, setIsAuthPagesExpanded] = useState(false)
   const [isDevelopmentExpanded, setIsDevelopmentExpanded] = useState(false)
   
+  // Flyout state management for collapsed sidebar
+  const [activeFlyout, setActiveFlyout] = useState<string | null>(null)
+  const flyoutTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({})
+  
   const { data: accessiblePaths = [] } = useUserAccessiblePaths()
   const { isPlatformAdmin } = useAuth()
   
   // Check if user is admin
   const isAdmin = isPlatformAdmin
+
+  // Flyout management functions
+  const handleFlyoutMouseEnter = (sectionKey: string) => {
+    if (state === 'collapsed') {
+      // Clear any existing timeout for this section
+      if (flyoutTimeouts.current[sectionKey]) {
+        clearTimeout(flyoutTimeouts.current[sectionKey])
+      }
+      // Set timeout to show flyout after 150ms delay
+      flyoutTimeouts.current[sectionKey] = setTimeout(() => {
+        setActiveFlyout(sectionKey)
+      }, 150)
+    }
+  }
+
+  const handleFlyoutMouseLeave = (sectionKey: string) => {
+    if (state === 'collapsed') {
+      // Clear the timeout
+      if (flyoutTimeouts.current[sectionKey]) {
+        clearTimeout(flyoutTimeouts.current[sectionKey])
+        delete flyoutTimeouts.current[sectionKey]
+      }
+      // Hide flyout after a brief delay to allow mouse movement to flyout panel
+      setTimeout(() => {
+        setActiveFlyout(prev => prev === sectionKey ? null : prev)
+      }, 100)
+    }
+  }
+
+  const handleFlyoutClick = (sectionKey: string) => {
+    if (state === 'collapsed') {
+      setActiveFlyout(prev => prev === sectionKey ? null : sectionKey)
+    }
+  }
+
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(flyoutTimeouts.current).forEach(timeout => {
+        clearTimeout(timeout)
+      })
+    }
+  }, [])
 
   const isActive = (path: string) => currentPath === path
   const canAccess = (path: string) => {
@@ -232,58 +349,40 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="bg-[#1a1b3a]">
-        {/* Dashboard - Admin Only */}
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-gray-400 text-xs font-semibold uppercase tracking-wider group-data-[collapsible=icon]:hidden">Dashboard</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {dashboardItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild tooltip={item.title}>
-                      <NavLink 
-                        to={item.url} 
-                        className={({ isActive }) => 
-                          `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-white ${
-                            isActive 
-                              ? 'bg-[#2d2e5f] text-white font-medium' 
-                              : 'hover:bg-gray-700'
-                          }`
-                        }
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {/* Admin Dashboard & Management - Admin Only */}
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
+        {/* Dashboard - Expandable/Collapsible Section */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <div 
+                  className="relative"
+                  onMouseEnter={() => handleFlyoutMouseEnter('dashboards')}
+                  onMouseLeave={() => handleFlyoutMouseLeave('dashboards')}
+                >
                   <SidebarMenuButton
-                    onClick={() => setIsAdminManagementExpanded(!isAdminManagementExpanded)}
+                    onClick={() => {
+                      if (state === 'collapsed') {
+                        handleFlyoutClick('dashboards')
+                      } else {
+                        setIsDashboardExpanded(!isDashboardExpanded)
+                      }
+                    }}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
-                    tooltip="Admin & Management"
+                    tooltip="Dashboard"
                   >
                     <div className="flex items-center gap-3">
-                      <Settings className="h-4 w-4" />
-                      <span className="group-data-[collapsible=icon]:hidden">Admin & Management</span>
+                      <Calendar className="h-4 w-4" />
+                      <span className="group-data-[collapsible=icon]:hidden">Dashboard</span>
                     </div>
                     <ChevronRight 
-                      className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isAdminManagementExpanded ? 'rotate-90' : ''}`} 
+                      className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isDashboardExpanded ? 'rotate-90' : ''}`} 
                     />
                   </SidebarMenuButton>
-                  {isAdminManagementExpanded && (
+                  
+                  {/* Regular expanded submenu */}
+                  {state !== 'collapsed' && isDashboardExpanded && (
                     <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
-                      {adminDashboardManagementItems
+                      {dashboardItems
                         .filter(item => isValidPage(item.url))
                         .map((item) => (
                           <SidebarMenuSubItem key={item.title}>
@@ -299,13 +398,99 @@ export function AppSidebar() {
                                 }
                               >
                                 <item.icon className="h-4 w-4" />
-                                <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
+                                <span>{item.title}</span>
                               </NavLink>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         ))}
                     </SidebarMenuSub>
                   )}
+                  
+                  {/* Flyout panel for collapsed state */}
+                  <FlyoutPanel
+                    items={dashboardItems}
+                    title="Dashboard"
+                    icon={Calendar}
+                    isVisible={state === 'collapsed' && activeFlyout === 'dashboards'}
+                    onMouseEnter={() => handleFlyoutMouseEnter('dashboards')}
+                    onMouseLeave={() => handleFlyoutMouseLeave('dashboards')}
+                    isValidPage={isValidPage}
+                  />
+                </div>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Admin Dashboard & Management - Admin Only */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <div 
+                    className="relative"
+                    onMouseEnter={() => handleFlyoutMouseEnter('admin-management')}
+                    onMouseLeave={() => handleFlyoutMouseLeave('admin-management')}
+                  >
+                    <SidebarMenuButton
+                      onClick={() => {
+                        if (state === 'collapsed') {
+                          handleFlyoutClick('admin-management')
+                        } else {
+                          setIsAdminManagementExpanded(!isAdminManagementExpanded)
+                        }
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
+                      tooltip="Admin & Management"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Settings className="h-4 w-4" />
+                        <span className="group-data-[collapsible=icon]:hidden">Admin & Management</span>
+                      </div>
+                      <ChevronRight 
+                        className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isAdminManagementExpanded ? 'rotate-90' : ''}`} 
+                      />
+                    </SidebarMenuButton>
+                    
+                    {/* Regular expanded submenu */}
+                    {state !== 'collapsed' && isAdminManagementExpanded && (
+                      <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
+                        {adminDashboardManagementItems
+                          .filter(item => isValidPage(item.url))
+                          .map((item) => (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton asChild>
+                                <NavLink 
+                                  to={item.url} 
+                                  className={({ isActive }) => 
+                                    `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                                      isActive 
+                                        ? 'bg-[#2d2e5f] text-white font-medium' 
+                                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                                    }`
+                                  }
+                                >
+                                  <item.icon className="h-4 w-4" />
+                                  <span>{item.title}</span>
+                                </NavLink>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                      </SidebarMenuSub>
+                    )}
+                    
+                    {/* Flyout panel for collapsed state */}
+                    <FlyoutPanel
+                      items={adminDashboardManagementItems}
+                      title="Admin & Management"
+                      icon={Settings}
+                      isVisible={state === 'collapsed' && activeFlyout === 'admin-management'}
+                      onMouseEnter={() => handleFlyoutMouseEnter('admin-management')}
+                      onMouseLeave={() => handleFlyoutMouseLeave('admin-management')}
+                      isValidPage={isValidPage}
+                    />
+                  </div>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -318,44 +503,69 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setIsDomainAdminExpanded(!isDomainAdminExpanded)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
-                    tooltip="Domain Administration"
+                  <div 
+                    className="relative"
+                    onMouseEnter={() => handleFlyoutMouseEnter('domain-admin')}
+                    onMouseLeave={() => handleFlyoutMouseLeave('domain-admin')}
                   >
-                    <div className="flex items-center gap-3">
-                      <BookOpen className="h-4 w-4" />
-                      <span className="group-data-[collapsible=icon]:hidden">Domain Administration</span>
-                    </div>
-                    <ChevronRight 
-                      className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isDomainAdminExpanded ? 'rotate-90' : ''}`} 
+                    <SidebarMenuButton
+                      onClick={() => {
+                        if (state === 'collapsed') {
+                          handleFlyoutClick('domain-admin')
+                        } else {
+                          setIsDomainAdminExpanded(!isDomainAdminExpanded)
+                        }
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
+                      tooltip="Domain Administration"
+                    >
+                      <div className="flex items-center gap-3">
+                        <BookOpen className="h-4 w-4" />
+                        <span className="group-data-[collapsible=icon]:hidden">Domain Administration</span>
+                      </div>
+                      <ChevronRight 
+                        className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isDomainAdminExpanded ? 'rotate-90' : ''}`} 
+                      />
+                    </SidebarMenuButton>
+                    
+                    {/* Regular expanded submenu */}
+                    {state !== 'collapsed' && isDomainAdminExpanded && (
+                      <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
+                        {domainManagementItems
+                          .filter(item => isValidPage(item.url))
+                          .map((item) => (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton asChild>
+                                <NavLink 
+                                  to={item.url} 
+                                  className={({ isActive }) => 
+                                    `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                                      isActive 
+                                        ? 'bg-[#2d2e5f] text-white font-medium' 
+                                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                                    }`
+                                  }
+                                >
+                                  <item.icon className="h-4 w-4" />
+                                  <span>{item.title}</span>
+                                </NavLink>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                      </SidebarMenuSub>
+                    )}
+                    
+                    {/* Flyout panel for collapsed state */}
+                    <FlyoutPanel
+                      items={domainManagementItems}
+                      title="Domain Administration"
+                      icon={BookOpen}
+                      isVisible={state === 'collapsed' && activeFlyout === 'domain-admin'}
+                      onMouseEnter={() => handleFlyoutMouseEnter('domain-admin')}
+                      onMouseLeave={() => handleFlyoutMouseLeave('domain-admin')}
+                      isValidPage={isValidPage}
                     />
-                  </SidebarMenuButton>
-                  {isDomainAdminExpanded && (
-                    <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
-                      {domainManagementItems
-                        .filter(item => isValidPage(item.url))
-                        .map((item) => (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink 
-                                to={item.url} 
-                                className={({ isActive }) => 
-                                  `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
-                                    isActive 
-                                      ? 'bg-[#2d2e5f] text-white font-medium' 
-                                      : 'text-gray-300 hover:text-white hover:bg-gray-700'
-                                  }`
-                                }
-                              >
-                                <item.icon className="h-4 w-4" />
-                                <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                    </SidebarMenuSub>
-                  )}
+                  </div>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -368,44 +578,69 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setIsSystemExpanded(!isSystemExpanded)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
-                    tooltip="System"
+                  <div 
+                    className="relative"
+                    onMouseEnter={() => handleFlyoutMouseEnter('system')}
+                    onMouseLeave={() => handleFlyoutMouseLeave('system')}
                   >
-                    <div className="flex items-center gap-3">
-                      <Settings className="h-4 w-4" />
-                      <span className="group-data-[collapsible=icon]:hidden">System</span>
-                    </div>
-                    <ChevronRight 
-                      className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isSystemExpanded ? 'rotate-90' : ''}`} 
+                    <SidebarMenuButton
+                      onClick={() => {
+                        if (state === 'collapsed') {
+                          handleFlyoutClick('system')
+                        } else {
+                          setIsSystemExpanded(!isSystemExpanded)
+                        }
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
+                      tooltip="System"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Settings className="h-4 w-4" />
+                        <span className="group-data-[collapsible=icon]:hidden">System</span>
+                      </div>
+                      <ChevronRight 
+                        className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isSystemExpanded ? 'rotate-90' : ''}`} 
+                      />
+                    </SidebarMenuButton>
+                    
+                    {/* Regular expanded submenu */}
+                    {state !== 'collapsed' && isSystemExpanded && (
+                      <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
+                        {systemItems
+                          .filter(item => isValidPage(item.url))
+                          .map((item) => (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton asChild>
+                                <NavLink 
+                                  to={item.url} 
+                                  className={({ isActive }) => 
+                                    `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                                      isActive 
+                                        ? 'bg-[#2d2e5f] text-white font-medium' 
+                                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                                    }`
+                                  }
+                                >
+                                  <item.icon className="h-4 w-4" />
+                                  <span>{item.title}</span>
+                                </NavLink>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                      </SidebarMenuSub>
+                    )}
+                    
+                    {/* Flyout panel for collapsed state */}
+                    <FlyoutPanel
+                      items={systemItems}
+                      title="System"
+                      icon={Settings}
+                      isVisible={state === 'collapsed' && activeFlyout === 'system'}
+                      onMouseEnter={() => handleFlyoutMouseEnter('system')}
+                      onMouseLeave={() => handleFlyoutMouseLeave('system')}
+                      isValidPage={isValidPage}
                     />
-                  </SidebarMenuButton>
-                  {isSystemExpanded && (
-                    <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
-                      {systemItems
-                        .filter(item => isValidPage(item.url))
-                        .map((item) => (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink 
-                                to={item.url} 
-                                className={({ isActive }) => 
-                                  `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
-                                    isActive 
-                                      ? 'bg-[#2d2e5f] text-white font-medium' 
-                                      : 'text-gray-300 hover:text-white hover:bg-gray-700'
-                                  }`
-                                }
-                              >
-                                <item.icon className="h-4 w-4" />
-                                <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                    </SidebarMenuSub>
-                  )}
+                  </div>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -546,44 +781,69 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setIsAuthPagesExpanded(!isAuthPagesExpanded)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
-                    tooltip="Authentication"
+                  <div 
+                    className="relative"
+                    onMouseEnter={() => handleFlyoutMouseEnter('authentication')}
+                    onMouseLeave={() => handleFlyoutMouseLeave('authentication')}
                   >
-                    <div className="flex items-center gap-3">
-                      <Shield className="h-4 w-4" />
-                      <span className="group-data-[collapsible=icon]:hidden">Authentication</span>
-                    </div>
-                    <ChevronRight 
-                      className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isAuthPagesExpanded ? 'rotate-90' : ''}`} 
+                    <SidebarMenuButton
+                      onClick={() => {
+                        if (state === 'collapsed') {
+                          handleFlyoutClick('authentication')
+                        } else {
+                          setIsAuthPagesExpanded(!isAuthPagesExpanded)
+                        }
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
+                      tooltip="Authentication"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Shield className="h-4 w-4" />
+                        <span className="group-data-[collapsible=icon]:hidden">Authentication</span>
+                      </div>
+                      <ChevronRight 
+                        className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isAuthPagesExpanded ? 'rotate-90' : ''}`} 
+                      />
+                    </SidebarMenuButton>
+                    
+                    {/* Regular expanded submenu */}
+                    {state !== 'collapsed' && isAuthPagesExpanded && (
+                      <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
+                        {authPagesItems
+                          .filter(item => isValidPage(item.url))
+                          .map((item) => (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton asChild>
+                                <NavLink 
+                                  to={item.url} 
+                                  className={({ isActive }) => 
+                                    `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                                      isActive 
+                                        ? 'bg-[#2d2e5f] text-white font-medium' 
+                                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                                    }`
+                                  }
+                                >
+                                  <item.icon className="h-4 w-4" />
+                                  <span>{item.title}</span>
+                                </NavLink>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                      </SidebarMenuSub>
+                    )}
+                    
+                    {/* Flyout panel for collapsed state */}
+                    <FlyoutPanel
+                      items={authPagesItems}
+                      title="Authentication"
+                      icon={Shield}
+                      isVisible={state === 'collapsed' && activeFlyout === 'authentication'}
+                      onMouseEnter={() => handleFlyoutMouseEnter('authentication')}
+                      onMouseLeave={() => handleFlyoutMouseLeave('authentication')}
+                      isValidPage={isValidPage}
                     />
-                  </SidebarMenuButton>
-                  {isAuthPagesExpanded && (
-                    <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
-                      {authPagesItems
-                        .filter(item => isValidPage(item.url))
-                        .map((item) => (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink 
-                                to={item.url} 
-                                className={({ isActive }) => 
-                                  `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
-                                    isActive 
-                                      ? 'bg-[#2d2e5f] text-white font-medium' 
-                                      : 'text-gray-300 hover:text-white hover:bg-gray-700'
-                                  }`
-                                }
-                              >
-                                <item.icon className="h-4 w-4" />
-                                <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                    </SidebarMenuSub>
-                  )}
+                  </div>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -596,44 +856,69 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setIsDevelopmentExpanded(!isDevelopmentExpanded)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
-                    tooltip="Development"
+                  <div 
+                    className="relative"
+                    onMouseEnter={() => handleFlyoutMouseEnter('development')}
+                    onMouseLeave={() => handleFlyoutMouseLeave('development')}
                   >
-                    <div className="flex items-center gap-3">
-                      <Monitor className="h-4 w-4" />
-                      <span className="group-data-[collapsible=icon]:hidden">Development</span>
-                    </div>
-                    <ChevronRight 
-                      className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isDevelopmentExpanded ? 'rotate-90' : ''}`} 
+                    <SidebarMenuButton
+                      onClick={() => {
+                        if (state === 'collapsed') {
+                          handleFlyoutClick('development')
+                        } else {
+                          setIsDevelopmentExpanded(!isDevelopmentExpanded)
+                        }
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
+                      tooltip="Development"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Monitor className="h-4 w-4" />
+                        <span className="group-data-[collapsible=icon]:hidden">Development</span>
+                      </div>
+                      <ChevronRight 
+                        className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isDevelopmentExpanded ? 'rotate-90' : ''}`} 
+                      />
+                    </SidebarMenuButton>
+                    
+                    {/* Regular expanded submenu */}
+                    {state !== 'collapsed' && isDevelopmentExpanded && (
+                      <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
+                        {developmentItems
+                          .filter(item => isValidPage(item.url))
+                          .map((item) => (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton asChild>
+                                <NavLink 
+                                  to={item.url} 
+                                  className={({ isActive }) => 
+                                    `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                                      isActive 
+                                        ? 'bg-[#2d2e5f] text-white font-medium' 
+                                        : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                                    }`
+                                  }
+                                >
+                                  <item.icon className="h-4 w-4" />
+                                  <span>{item.title}</span>
+                                </NavLink>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                      </SidebarMenuSub>
+                    )}
+                    
+                    {/* Flyout panel for collapsed state */}
+                    <FlyoutPanel
+                      items={developmentItems}
+                      title="Development"
+                      icon={Monitor}
+                      isVisible={state === 'collapsed' && activeFlyout === 'development'}
+                      onMouseEnter={() => handleFlyoutMouseEnter('development')}
+                      onMouseLeave={() => handleFlyoutMouseLeave('development')}
+                      isValidPage={isValidPage}
                     />
-                  </SidebarMenuButton>
-                  {isDevelopmentExpanded && (
-                    <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
-                      {developmentItems
-                        .filter(item => isValidPage(item.url))
-                        .map((item) => (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink 
-                                to={item.url} 
-                                className={({ isActive }) => 
-                                  `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
-                                    isActive 
-                                      ? 'bg-[#2d2e5f] text-white font-medium' 
-                                      : 'text-gray-300 hover:text-white hover:bg-gray-700'
-                                  }`
-                                }
-                              >
-                                <item.icon className="h-4 w-4" />
-                                <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                    </SidebarMenuSub>
-                  )}
+                  </div>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>

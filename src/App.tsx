@@ -36,6 +36,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import AcceptInvitation from "./pages/AcceptInvitation";
 import AdminDashboard from "./pages/AdminDashboard";
+import PlatformAdminDashboard from "./pages/PlatformAdminDashboard";
 import DomainsDashboard from "./pages/DomainsDashboard";
 import DomainAdmin from "./pages/DomainAdmin";
 import { TenantAdminPage } from "./pages/TenantAdmin";
@@ -132,7 +133,15 @@ const App = () => (
                     <TenantAdminPage />
                   </RouteProtection>
                 } />
+                {/* Platform Admin Dashboard */}
                 <Route path="dashboard" element={
+                  <RouteProtection>
+                    <PlatformAdminDashboard />
+                  </RouteProtection>
+                } />
+                
+                {/* New tenant dashboard route */}
+                <Route path="tenant-dashboard" element={
                   <RouteProtection>
                     <AdminDashboard />
                   </RouteProtection>
