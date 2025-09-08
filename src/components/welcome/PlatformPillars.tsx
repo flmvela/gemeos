@@ -6,125 +6,127 @@ export function PlatformPillars() {
   const pillars = [
     {
       icon: Route,
-      title: "Adaptive Learning Paths",
-      description: "AI-powered personalization that adjusts to each student's learning style, pace, and preferences.",
-      color: "from-[#06b6d4] to-[#0891b2]",
-      hoverColor: "group-hover:shadow-[#06b6d4]/20"
+      title: 'Adaptive Learning Paths',
+      description:
+        "AI-powered personalization that adjusts to each student's learning style, pace, and preferences.",
+      gradient: 'from-[#06b6d4] to-[#8b5cf6]',
     },
     {
       icon: Lightbulb,
-      title: "Intelligent Content Creation",
-      description: "Automatically generate quizzes, exercises, and interactive materials from your existing content.",
-      color: "from-[#8b5cf6] to-[#7c3aed]",
-      hoverColor: "group-hover:shadow-[#8b5cf6]/20"
+      title: 'Intelligent Content Creation',
+      description:
+        'Automatically generate quizzes, exercises, and interactive materials from your existing content.',
+      gradient: 'from-[#8b5cf6] to-[#ec4899]',
     },
     {
       icon: Trophy,
-      title: "Gamification",
-      description: "Motivate students with achievements, leaderboards, and progress tracking that makes learning fun.",
-      color: "from-[#f59e0b] to-[#d97706]",
-      hoverColor: "group-hover:shadow-[#f59e0b]/20"
+      title: 'Gamification',
+      description:
+        'Motivate students with achievements, leaderboards, and progress tracking that makes learning fun.',
+      gradient: 'from-[#f59e0b] to-[#d97706]',
     },
     {
       icon: BarChart3,
-      title: "Advanced Analytics",
-      description: "Comprehensive insights into learning patterns, performance metrics, and areas for improvement.",
-      color: "from-[#ef4444] to-[#dc2626]",
-      hoverColor: "group-hover:shadow-[#ef4444]/20"
-    }
+      title: 'Advanced Analytics',
+      description:
+        'Comprehensive insights into learning patterns, performance metrics, and areas for improvement.',
+      gradient: 'from-[#ef4444] to-[#dc2626]',
+    },
   ];
 
   return (
-    <section className="section-gradient-primary relative min-h-screen flex items-center justify-center">
-      {/* Smooth transition gradients */}
-      <div className="section-transition-top"></div>
-      
-      <div className="w-full px-4 py-20 relative z-10">
+    <section
+      className="
+        relative
+        py-24
+        overflow-hidden
+        /* Dark hero-like backdrop */
+        bg-[radial-gradient(1200px_600px_at_50%_0%,rgba(139,92,246,0.18),transparent_60%)]
+        before:absolute before:inset-0 before:bg-gradient-to-b before:from-[#1e1b4b] before:via-[#1e1b4b] before:via-40% before:to-[#14112e]
+        before:-z-10
+      "
+    >
+      {/* Soft ambient blobs */}
+      <div className="pointer-events-none absolute -top-40 -left-40 h-[44rem] w-[44rem] rounded-full bg-[#8b5cf6]/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -right-40 h-[36rem] w-[36rem] rounded-full bg-[#06b6d4]/20 blur-3xl" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-6">
+        {/* Heading */}
         <motion.div
           className="text-center mb-16"
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
           viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
         >
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
             Platform Pillars
           </h2>
-          <p className="text-xl text-white/80 max-w-3xl mx-auto">
+          <p className="text-lg md:text-xl text-white/80 max-w-3xl mx-auto">
             Four core features that make Gemeos the most powerful AI-driven learning platform
           </p>
         </motion.div>
 
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {pillars.map((pillar, index) => {
-            const Icon = pillar.icon;
-            
+        {/* Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+          {pillars.map((p, i) => {
+            const Icon = p.icon;
             return (
               <motion.div
-                key={index}
-                className="group"
-                initial={{ opacity: 0, y: 50 }}
+                key={p.title}
+                initial={{ opacity: 0, y: 40 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
                 viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.08 }}
+                className="group"
               >
-                <Card 
-                  className={`
-                    h-full p-8 bg-white border border-gray-200/50 
-                    hover:border-gray-300 transition-all duration-300 cursor-pointer
-                    hover:shadow-2xl ${pillar.hoverColor}
-                    transform hover:-translate-y-2
-                  `}
-                  style={{
-                    transformStyle: 'preserve-3d',
-                  }}
-                  onMouseEnter={(e) => {
-                    const card = e.currentTarget;
-                    card.style.transform = 'perspective(1000px) rotateX(5deg) rotateY(5deg) translateY(-8px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    const card = e.currentTarget;
-                    card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)';
-                  }}
+                <Card
+                  className="
+                    h-full p-8
+                    bg-white/5
+                    border border-white/10
+                    backdrop-blur-md
+                    rounded-2xl
+                    shadow-[0_10px_40px_rgba(0,0,0,0.25)]
+                    transition-transform duration-300 hover:-translate-y-1.5
+                  "
                 >
-                  <div className="text-center relative">
-                    <motion.div
+                  <div className="text-center">
+                    <div
                       className={`
-                        inline-flex items-center justify-center w-16 h-16 rounded-xl mb-6
-                        bg-gradient-to-r ${pillar.color} text-white shadow-lg
+                        inline-flex items-center justify-center
+                        w-16 h-16 rounded-xl mb-6
+                        text-white shadow-lg
+                        bg-gradient-to-r ${p.gradient}
                       `}
-                      whileHover={{ 
-                        scale: 1.1,
-                        rotate: [0, -5, 5, 0],
-                      }}
-                      transition={{ type: "spring", stiffness: 400, damping: 10 }}
                     >
                       <Icon className="w-8 h-8" />
-                    </motion.div>
-                    
-                    <h3 className="text-xl font-bold text-[#030213] mb-4 group-hover:bg-gradient-to-r group-hover:from-[#030213] group-hover:to-[#06b6d4] group-hover:bg-clip-text group-hover:text-transparent transition-all duration-300">
-                      {pillar.title}
+                    </div>
+
+                    <h3 className="text-xl font-semibold text-white mb-3">
+                      {p.title}
                     </h3>
-                    <p className="text-gray-600 leading-relaxed">
-                      {pillar.description}
+
+                    <p className="text-white/70 leading-relaxed">
+                      {p.description}
                     </p>
 
-                    {/* Accent border */}
-                    <div className={`
-                      absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r ${pillar.color} 
-                      transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 rounded-b-lg
-                    `} />
+                    {/* Accent underline on hover */}
+                    <div
+                      className={`
+                        mt-6 h-1 rounded-full
+                        bg-gradient-to-r ${p.gradient}
+                        transform scale-x-0 group-hover:scale-x-100
+                        transition-transform duration-300 origin-left
+                      `}
+                    />
                   </div>
                 </Card>
               </motion.div>
             );
           })}
-          </div>
         </div>
       </div>
-      
-      <div className="section-transition-bottom"></div>
     </section>
   );
 }
