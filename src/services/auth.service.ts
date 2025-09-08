@@ -27,6 +27,10 @@ export class AuthService {
   private static instance: AuthService;
   private currentTenantId: string | null = null;
   private cachedPermissions: Map<string, Permission[]> = new Map();
+  private sessionCache: AuthSession | null = null;
+  private sessionCacheTime: number = 0;
+  private sessionPromise: Promise<AuthSession | null> | null = null;
+  private readonly CACHE_DURATION = 5000; // 5 seconds cache
 
   private constructor() {}
 
@@ -50,53 +54,198 @@ export class AuthService {
   async getCurrentSession(): Promise<AuthSession | null> {
     console.log('🔍 getCurrentSession: Starting...');
     
+    // Check cache first
+    const now = Date.now();
+    if (this.sessionCache && (now - this.sessionCacheTime) < this.CACHE_DURATION) {
+      console.log('🔍 getCurrentSession: Returning cached session');
+      return this.sessionCache;
+    }
+    
+    // If there's an ongoing request, wait for it
+    if (this.sessionPromise) {
+      console.log('🔍 getCurrentSession: Waiting for existing request...');
+      return this.sessionPromise;
+    }
+    
+    // Start new request with deduplication
+    this.sessionPromise = this.fetchCurrentSession();
+    
     try {
-      console.log('🔍 getCurrentSession: Getting session...');
+      const result = await this.sessionPromise;
+      // Cache the result
+      this.sessionCache = result;
+      this.sessionCacheTime = Date.now();
+      return result;
+    } finally {
+      // Clear the promise after completion
+      this.sessionPromise = null;
+    }
+  }
+  
+  /**
+   * Internal method to actually fetch the session
+   */
+  private async fetchCurrentSession(): Promise<AuthSession | null> {
+    try {
+      console.log('🔍 fetchCurrentSession: Getting session from Supabase...');
       
-      // Add timeout to prevent hanging
-      const sessionPromise = supabase.auth.getSession();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Session timeout')), 2000) // Reduce timeout to 2 seconds
-      );
+      // Create a timeout promise with longer timeout (10 seconds)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        const timeoutId = setTimeout(() => {
+          console.error('🔍 fetchCurrentSession: Session fetch timed out after 10 seconds');
+          reject(new Error('Session fetch timeout after 10 seconds'));
+        }, 10000);
+        
+        // Log warning after 3 seconds if still waiting
+        setTimeout(() => {
+          console.warn('🔍 fetchCurrentSession: Still waiting for session after 3 seconds...');
+        }, 3000);
+        
+        return timeoutId;
+      });
       
-      const result = await Promise.race([
-        sessionPromise,
-        timeoutPromise
-      ]) as any;
+      console.log('🔍 fetchCurrentSession: Starting race between session fetch and timeout...');
       
-      console.log('🔍 getCurrentSession: Session call completed');
+      // Try to get session with timeout protection
+      let sessionResult;
+      try {
+        sessionResult = await Promise.race([
+          supabase.auth.getSession().then(result => {
+            console.log('🔍 fetchCurrentSession: getSession() completed successfully');
+            return result;
+          }).catch(error => {
+            console.error('🔍 fetchCurrentSession: getSession() threw error:', error);
+            throw error;
+          }),
+          timeoutPromise
+        ]);
+      } catch (error: any) {
+        console.error('🔍 fetchCurrentSession: Session fetch failed or timed out:', error.message);
+        
+        // If it's a timeout, return null session and let auth state handle it
+        if (error.message.includes('timeout')) {
+          console.log('🔍 fetchCurrentSession: Session fetch timed out, returning null');
+          // Don't try to recover, just return null and let Supabase auth state handle it
+          sessionResult = { data: { session: null }, error };
+        } else {
+          sessionResult = { data: { session: null }, error };
+        }
+      }
       
-      const { data: { session }, error: sessionError } = result;
+      const { data: { session }, error: sessionError } = sessionResult as any;
+      
+      console.log('🔍 fetchCurrentSession: Session call completed, session exists:', !!session);
       
       if (sessionError) {
-        console.error('🔍 getCurrentSession: Session error:', sessionError);
+        console.error('🔍 fetchCurrentSession: Session error:', sessionError);
         return null;
       }
       
       if (!session?.user) {
-        console.log('🔍 getCurrentSession: No session found, returning null');
+        console.log('🔍 fetchCurrentSession: No session found, returning null');
         return null;
       }
       
       const user = session.user;
-      console.log('🔍 getCurrentSession: User received:', user?.email);
+      console.log('🔍 fetchCurrentSession: User received:', user?.email);
       
-      // Return a simplified session to make login work
-      console.log('🔍 getCurrentSession: Returning simplified session for login');
+      // Fetch actual user tenants and roles from database
+      console.log('🔍 getCurrentSession: Fetching user tenant associations...');
+      
+      let userTenants = null;
+      let tenantsError = null;
+      
+      // Use simpler query without foreign key syntax
+      const { data: basicTenants, error: basicError } = await supabase
+        .from('user_tenants')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+      
+      if (basicError) {
+        console.error('🔍 getCurrentSession: Error fetching user tenants:', basicError);
+        tenantsError = basicError;
+      } else {
+        userTenants = basicTenants;
+        
+        // Fetch related data separately if we have user tenants
+        if (userTenants && userTenants.length > 0) {
+          for (const ut of userTenants) {
+            // Fetch tenant info
+            if (ut.tenant_id) {
+              const { data: tenant } = await supabase
+                .from('tenants')
+                .select('*')
+                .eq('id', ut.tenant_id)
+                .single();
+              ut.tenants = tenant;
+            }
+            
+            // Fetch role info
+            if (ut.role_id) {
+              const { data: role } = await supabase
+                .from('user_roles')
+                .select('*')
+                .eq('id', ut.role_id)
+                .single();
+              ut.user_roles = role;
+            }
+          }
+        }
+      }
+      
+      // Check if user is a platform admin
+      // First check if there's a platform_admin role in user_roles
+      let isPlatformAdmin = false;
+      
+      if (userTenants && userTenants.length > 0) {
+        // Check if any of the user's roles is platform_admin
+        isPlatformAdmin = userTenants.some(ut => 
+          ut.user_roles?.name === 'platform_admin' || 
+          ut.user_roles?.name === 'super_admin'
+        );
+      }
+      
+      // If no platform admin role found, check email against known admins
+      // This is a fallback for the initial admin user
+      if (!isPlatformAdmin && user.email === 'admin@gemeos.ai') {
+        isPlatformAdmin = true;
+      }
+      
+      // Find the primary tenant or use the first one
+      const primaryTenant = userTenants?.find(ut => ut.is_primary) || userTenants?.[0];
+      
+      console.log('🔍 getCurrentSession: User tenants found:', userTenants?.length || 0);
+      console.log('🔍 getCurrentSession: Is platform admin:', isPlatformAdmin);
+      console.log('🔍 getCurrentSession: Primary tenant:', primaryTenant?.tenants?.name);
+      
       return {
         user_id: user.id,
         email: user.email!,
-        tenants: [], // Simplified - no tenant info for now
-        current_tenant: null, // Simplified - no tenant info for now
-        is_platform_admin: true // Assume platform admin for now to allow access
+        tenants: userTenants || [],
+        current_tenant: primaryTenant ? {
+          tenant_id: primaryTenant.tenant_id,
+          role_id: primaryTenant.role_id,
+          tenant: primaryTenant.tenants,
+          role: primaryTenant.user_roles,
+          is_primary: primaryTenant.is_primary
+        } : null,
+        is_platform_admin: isPlatformAdmin
       };
     } catch (error) {
-      console.error('🔍 getCurrentSession: Error:', error);
-      
-      // Skip fallback since we're using auth state listener now
-      
+      console.error('🔍 fetchCurrentSession: Error:', error);
       return null;
     }
+  }
+  
+  /**
+   * Clear the session cache (useful when auth state changes)
+   */
+  clearSessionCache(): void {
+    console.log('🔍 Clearing session cache');
+    this.sessionCache = null;
+    this.sessionCacheTime = 0;
+    this.sessionPromise = null;
   }
 
   /**

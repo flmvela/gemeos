@@ -2,7 +2,7 @@
  * Authentication and Authorization React Hooks
  */
 
-import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode, useRef } from 'react';
 import { authService } from '@/services/auth.service';
 import { supabase } from '@/integrations/supabase/client';
 import type { 
@@ -19,6 +19,7 @@ import type {
 
 interface AuthContextType {
   session: AuthSession | null;
+  user: { id: string; email: string } | null;
   tenantContext: TenantContext | null;
   loading: boolean;
   error: Error | null;
@@ -42,22 +43,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [tenantContext, setTenantContext] = useState<TenantContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const isProcessingAuthRef = useRef(false);
+  const hasSubscribedRef = useRef(false);
 
   const switchTenant = useCallback(async (tenantId: string) => {
     try {
       setLoading(true);
       await authService.switchTenant(tenantId);
-      // After switching tenant, re-trigger auth state to update context
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const authSession = {
-          user_id: user.id,
-          email: user.email!,
-          tenants: [],
-          current_tenant: null,
-          is_platform_admin: true
-        };
-        setSession(authSession);
+      // After switching tenant, reload the full session
+      const fullSession = await authService.getCurrentSession();
+      if (fullSession) {
+        setSession(fullSession);
+        // Update tenant context for the new tenant
+        const context = await authService.getTenantContext();
+        setTenantContext(context);
       }
     } catch (err) {
       setError(err as Error);
@@ -79,49 +78,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session, tenantContext]);
 
   useEffect(() => {
+    // Prevent multiple subscriptions
+    if (hasSubscribedRef.current) {
+      console.log('🔄 Auth state listener already exists, skipping setup');
+      return;
+    }
+    
+    hasSubscribedRef.current = true;
     console.log('🔄 Setting up auth state listener...');
     
     // Listen to auth state changes instead of calling getSession directly
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, supabaseSession) => {
+      async (event, supabaseSession) => {
         console.log('🔄 Auth state changed:', event, supabaseSession?.user?.email || 'no user');
         
         if (event === 'SIGNED_OUT' || !supabaseSession?.user) {
           console.log('🔄 User signed out or no session, clearing state');
+          authService.clearSessionCache(); // Clear cache on sign out
           setSession(null);
           setTenantContext(null);
           setLoading(false);
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          console.log('🔄 User signed in or token refreshed, creating session');
-          // Only process for sign in and token refresh events
-          const authSession = {
-            user_id: supabaseSession.user.id,
-            email: supabaseSession.user.email!,
-            tenants: [], // Simplified - no tenant info for now
-            current_tenant: null, // Simplified - no tenant info for now
-            is_platform_admin: true // Assume platform admin for now to allow access
-          };
-          
-          setSession(authSession);
-          setTenantContext(null); // Simplified for now
-          setLoading(false);
-          console.log('🔄 Session set:', authSession.email);
-        } else if (event === 'INITIAL_SESSION') {
-          console.log('🔄 Initial session event');
-          // Handle initial session load
-          if (supabaseSession?.user) {
-            console.log('🔄 Initial session has user, creating session');
-            const authSession = {
-              user_id: supabaseSession.user.id,
-              email: supabaseSession.user.email!,
-              tenants: [],
-              current_tenant: null,
-              is_platform_admin: true
-            };
-            setSession(authSession);
-            console.log('🔄 Initial session set:', authSession.email);
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+          if (supabaseSession?.user && !isProcessingAuthRef.current) {
+            console.log('🔄 User authenticated, fetching full session data...');
+            isProcessingAuthRef.current = true;
+            
+            // Clear cache on sign in to ensure fresh data
+            if (event === 'SIGNED_IN') {
+              authService.clearSessionCache();
+            }
+            
+            try {
+              // Use the auth service to get the full session with tenant data
+              const fullSession = await authService.getCurrentSession();
+              
+              if (fullSession) {
+                console.log('🔄 Full session loaded:', {
+                  email: fullSession.email,
+                  tenants: fullSession.tenants?.length || 0,
+                  isPlatformAdmin: fullSession.is_platform_admin,
+                  currentTenant: fullSession.current_tenant?.tenant?.name
+                });
+                
+                setSession(fullSession);
+                
+                // If user has a current tenant, get the tenant context
+                if (fullSession.current_tenant) {
+                  const context = await authService.getTenantContext();
+                  setTenantContext(context);
+                }
+              } else {
+                console.log('🔄 No session data available');
+                setSession(null);
+                setTenantContext(null);
+              }
+            } catch (error) {
+              console.error('🔄 Error loading session:', error);
+              setSession(null);
+              setTenantContext(null);
+            } finally {
+              // Always reset the processing flag
+              isProcessingAuthRef.current = false;
+            }
+          } else if (supabaseSession?.user && isProcessingAuthRef.current) {
+            console.log('🔄 Already processing auth, skipping duplicate event');
           } else {
-            console.log('🔄 Initial session has no user');
+            console.log('🔄 No user in auth state');
+            setSession(null);
+            setTenantContext(null);
           }
           setLoading(false);
         }
@@ -135,20 +159,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 2000);
 
     return () => {
+      console.log('🔄 Cleaning up auth state listener');
+      hasSubscribedRef.current = false;
       subscription.unsubscribe();
       clearTimeout(timeout);
     };
-  }, []);
+  }, []); // Empty dependency array - we only want ONE auth listener
 
   const value: AuthContextType = {
     session,
+    user: session ? { id: session.user_id, email: session.email } : null,
     tenantContext,
     loading,
     error,
     switchTenant,
-    refresh: () => {
+    refresh: async () => {
       // Trigger auth state refresh by getting current session
-      supabase.auth.getSession();
+      const fullSession = await authService.getCurrentSession();
+      if (fullSession) {
+        setSession(fullSession);
+        if (fullSession.current_tenant) {
+          const context = await authService.getTenantContext();
+          setTenantContext(context);
+        }
+      }
     },
     hasPermission,
     isPlatformAdmin: session?.is_platform_admin || false,
