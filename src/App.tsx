@@ -43,7 +43,11 @@ import { TenantAdminPage } from "./pages/TenantAdmin";
 import AccessManagement from "./pages/AccessManagement";
 import { TenantManagement } from "./pages/TenantManagement";
 import { TenantManagementSimple } from "./pages/TenantManagementSimple";
+import { CreateTenantPage } from "./pages/CreateTenantPage";
+import { EditTenantPage } from "./pages/EditTenantPage";
+import { TenantDetailEditPage } from "./pages/TenantDetailEditPage";
 import ClassCreation from "./pages/ClassCreation";
+import NoAccess from "./pages/NoAccess";
 
 const queryClient = new QueryClient();
 
@@ -110,7 +114,7 @@ const App = () => (
               <Routes>
                 <Route index element={
                   <RouteProtection>
-                    <TenantAdminPage />
+                    <Navigate to="/admin/dashboard" replace />
                   </RouteProtection>
                 } />
                 <Route path="teachers" element={
@@ -140,12 +144,6 @@ const App = () => (
                   </RouteProtection>
                 } />
                 
-                {/* New tenant dashboard route */}
-                <Route path="tenant-dashboard" element={
-                  <RouteProtection>
-                    <AdminDashboard />
-                  </RouteProtection>
-                } />
                 <Route path="domains/dashboard" element={
                   <RouteProtection>
                     <DomainsDashboard />
@@ -284,9 +282,36 @@ const App = () => (
                     <TenantManagementSimple />
                   </RouteProtection>
                 } />
+                <Route path="tenants/create" element={
+                  <RouteProtection>
+                    <CreateTenantPage />
+                  </RouteProtection>
+                } />
+                <Route path="tenants/:tenantId/edit" element={
+                  <RouteProtection>
+                    <EditTenantPage />
+                  </RouteProtection>
+                } />
+                <Route path="tenants/:tenantId" element={
+                  <RouteProtection>
+                    <TenantDetailEditPage />
+                  </RouteProtection>
+                } />
               </Routes>
             </TeacherLayout>
           } />
+          <Route path="/tenant/*" element={
+            <TeacherLayout>
+              <Routes>
+                <Route path="dashboard" element={
+                  <RouteProtection>
+                    <AdminDashboard />
+                  </RouteProtection>
+                } />
+              </Routes>
+            </TeacherLayout>
+          } />
+          <Route path="/no-access" element={<NoAccess />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

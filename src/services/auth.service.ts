@@ -89,48 +89,25 @@ export class AuthService {
     try {
       console.log('🔍 fetchCurrentSession: Getting session from Supabase...');
       
-      // Create a timeout promise with longer timeout (10 seconds)
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        const timeoutId = setTimeout(() => {
-          console.error('🔍 fetchCurrentSession: Session fetch timed out after 10 seconds');
-          reject(new Error('Session fetch timeout after 10 seconds'));
-        }, 10000);
-        
-        // Log warning after 3 seconds if still waiting
+      // Use a short timeout (2 seconds) and race with getSession
+      const timeoutPromise = new Promise<{ data: { session: null }, error: Error }>((resolve) => 
         setTimeout(() => {
-          console.warn('🔍 fetchCurrentSession: Still waiting for session after 3 seconds...');
-        }, 3000);
-        
-        return timeoutId;
-      });
+          console.log('🔍 fetchCurrentSession: Timeout reached, returning null session');
+          resolve({ data: { session: null }, error: new Error('Session fetch timeout') });
+        }, 2000) // 2 second timeout
+      );
       
-      console.log('🔍 fetchCurrentSession: Starting race between session fetch and timeout...');
-      
-      // Try to get session with timeout protection
-      let sessionResult;
-      try {
-        sessionResult = await Promise.race([
-          supabase.auth.getSession().then(result => {
-            console.log('🔍 fetchCurrentSession: getSession() completed successfully');
-            return result;
-          }).catch(error => {
-            console.error('🔍 fetchCurrentSession: getSession() threw error:', error);
-            throw error;
-          }),
-          timeoutPromise
-        ]);
-      } catch (error: any) {
-        console.error('🔍 fetchCurrentSession: Session fetch failed or timed out:', error.message);
-        
-        // If it's a timeout, return null session and let auth state handle it
-        if (error.message.includes('timeout')) {
-          console.log('🔍 fetchCurrentSession: Session fetch timed out, returning null');
-          // Don't try to recover, just return null and let Supabase auth state handle it
-          sessionResult = { data: { session: null }, error };
-        } else {
-          sessionResult = { data: { session: null }, error };
-        }
-      }
+      // Race between session fetch and timeout
+      const sessionResult = await Promise.race([
+        supabase.auth.getSession().then(result => {
+          console.log('🔍 fetchCurrentSession: getSession() completed successfully');
+          return result;
+        }).catch(error => {
+          console.error('🔍 fetchCurrentSession: getSession() threw error:', error);
+          return { data: { session: null }, error };
+        }),
+        timeoutPromise
+      ]);
       
       const { data: { session }, error: sessionError } = sessionResult as any;
       

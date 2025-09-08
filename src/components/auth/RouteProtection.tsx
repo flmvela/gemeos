@@ -42,6 +42,12 @@ export const RouteProtection = ({ children }: RouteProtectionProps) => {
   // Admin dashboard - only platform admin
   if (path === '/admin/dashboard') {
     if (!isPlatformAdmin) {
+      // Redirect to appropriate dashboard based on role
+      if (isTenantAdmin) {
+        return <Navigate to="/tenant/dashboard" replace />;
+      } else if (isTeacher) {
+        return <Navigate to="/teacher/dashboard" replace />;
+      }
       return <Navigate to="/unauthorized" replace />;
     }
   }
@@ -56,6 +62,10 @@ export const RouteProtection = ({ children }: RouteProtectionProps) => {
   // Tenant dashboard - accessible by admin and tenant admin (not teacher)
   if (path === '/tenant/dashboard') {
     if (!isPlatformAdmin && !isTenantAdmin) {
+      // Redirect teacher to teacher dashboard
+      if (isTeacher) {
+        return <Navigate to="/teacher/dashboard" replace />;
+      }
       return <Navigate to="/unauthorized" replace />;
     }
   }

@@ -78,91 +78,103 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session, tenantContext]);
 
   useEffect(() => {
-    // Prevent multiple subscriptions
-    if (hasSubscribedRef.current) {
-      console.log('🔄 Auth state listener already exists, skipping setup');
-      return;
-    }
-    
-    hasSubscribedRef.current = true;
-    console.log('🔄 Setting up auth state listener...');
-    
-    // Listen to auth state changes instead of calling getSession directly
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, supabaseSession) => {
-        console.log('🔄 Auth state changed:', event, supabaseSession?.user?.email || 'no user');
-        
-        if (event === 'SIGNED_OUT' || !supabaseSession?.user) {
-          console.log('🔄 User signed out or no session, clearing state');
-          authService.clearSessionCache(); // Clear cache on sign out
-          setSession(null);
-          setTenantContext(null);
-          setLoading(false);
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-          if (supabaseSession?.user && !isProcessingAuthRef.current) {
-            console.log('🔄 User authenticated, fetching full session data...');
-            isProcessingAuthRef.current = true;
-            
-            // Clear cache on sign in to ensure fresh data
-            if (event === 'SIGNED_IN') {
-              authService.clearSessionCache();
+    let subscription: any = null;
+    let finished = false;
+
+    async function initAuth() {
+      console.log('🔄 Initializing auth...');
+      
+      // 1) Subscribe FIRST so we don't miss SIGNED_IN events
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(
+        async (event, supabaseSession) => {
+          console.log('🔄 Auth state changed:', event, supabaseSession?.user?.email || 'no user');
+          
+          if (event === 'SIGNED_OUT' || !supabaseSession?.user) {
+            console.log('🔄 User signed out or no session, clearing state');
+            authService.clearSessionCache();
+            setSession(null);
+            setTenantContext(null);
+            if (!finished) {
+              finished = true;
+              setLoading(false);
             }
-            
-            try {
-              // Use the auth service to get the full session with tenant data
-              const fullSession = await authService.getCurrentSession();
+          } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+            if (supabaseSession?.user) {
+              console.log('🔄 User authenticated, fetching full session data...');
               
-              if (fullSession) {
-                console.log('🔄 Full session loaded:', {
-                  email: fullSession.email,
-                  tenants: fullSession.tenants?.length || 0,
-                  isPlatformAdmin: fullSession.is_platform_admin,
-                  currentTenant: fullSession.current_tenant?.tenant?.name
-                });
+              // Only clear cache on actual sign in, not on initial session or token refresh
+              if (event === 'SIGNED_IN') {
+                authService.clearSessionCache();
+              }
+              
+              try {
+                // Use the auth service to get the full session with tenant data
+                const fullSession = await authService.getCurrentSession();
                 
-                setSession(fullSession);
-                
-                // If user has a current tenant, get the tenant context
-                if (fullSession.current_tenant) {
-                  const context = await authService.getTenantContext();
-                  setTenantContext(context);
+                if (fullSession) {
+                  console.log('🔄 Full session loaded:', {
+                    email: fullSession.email,
+                    tenants: fullSession.tenants?.length || 0,
+                    isPlatformAdmin: fullSession.is_platform_admin,
+                    currentTenant: fullSession.current_tenant?.tenant?.name
+                  });
+                  
+                  setSession(fullSession);
+                  
+                  // If user has a current tenant, get the tenant context
+                  if (fullSession.current_tenant) {
+                    const context = await authService.getTenantContext();
+                    setTenantContext(context);
+                  }
+                } else {
+                  console.log('🔄 No session data available');
+                  setSession(null);
+                  setTenantContext(null);
                 }
-              } else {
-                console.log('🔄 No session data available');
+              } catch (error) {
+                console.error('🔄 Error loading session:', error);
                 setSession(null);
                 setTenantContext(null);
               }
-            } catch (error) {
-              console.error('🔄 Error loading session:', error);
-              setSession(null);
-              setTenantContext(null);
-            } finally {
-              // Always reset the processing flag
-              isProcessingAuthRef.current = false;
             }
-          } else if (supabaseSession?.user && isProcessingAuthRef.current) {
-            console.log('🔄 Already processing auth, skipping duplicate event');
-          } else {
-            console.log('🔄 No user in auth state');
-            setSession(null);
-            setTenantContext(null);
+            if (!finished) {
+              finished = true;
+              setLoading(false);
+            }
           }
-          setLoading(false);
+        }
+      );
+      
+      subscription = sub;
+      
+      // 2) Try to get current session with a short timeout
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
+      const currentSession = await Promise.race([
+        authService.getCurrentSession(),
+        timeout
+      ]);
+      
+      if (currentSession) {
+        console.log('🔄 Initial session loaded');
+        setSession(currentSession);
+        
+        if (currentSession.current_tenant) {
+          const context = await authService.getTenantContext();
+          setTenantContext(context);
         }
       }
-    );
-
-    // Reduced timeout fallback 
-    const timeout = setTimeout(() => {
-      console.log('⚠️ Auth state timeout, setting loading to false');
+      
+      finished = true;
       setLoading(false);
-    }, 2000);
+    }
+
+    initAuth();
 
     return () => {
       console.log('🔄 Cleaning up auth state listener');
-      hasSubscribedRef.current = false;
-      subscription.unsubscribe();
-      clearTimeout(timeout);
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, []); // Empty dependency array - we only want ONE auth listener
 

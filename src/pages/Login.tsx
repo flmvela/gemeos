@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { getDashboardUrlForUser } from '@/utils/auth-redirects';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -20,8 +21,9 @@ const Login = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (!authLoading && session) {
+      const redirectUrl = getDashboardUrlForUser(session);
       const timeout = setTimeout(() => {
-        navigate('/admin/dashboard', { replace: true });
+        navigate(redirectUrl, { replace: true });
       }, 100); // Slightly longer delay for smoother UX
 
       return () => clearTimeout(timeout);
@@ -44,15 +46,13 @@ const Login = () => {
         throw error;
       }
 
-      if (data.user) {
-        // Success! The useAuth hook will handle the session update
-        // and the useEffect above will redirect to dashboard
+      if (data.user && data.session) {
+        // Success! Navigate immediately based on the session
         console.log('Login successful:', data.user.email);
         
-        // Fallback redirect after a short delay (in case useAuth is slow)
-        setTimeout(() => {
-          navigate('/admin/dashboard', { replace: true });
-        }, 1000);
+        // Navigate immediately based on the session we got
+        const redirectUrl = getDashboardUrlForUser(data.session);
+        navigate(redirectUrl, { replace: true });
       }
     } catch (err: any) {
       console.error('Login error:', err);
