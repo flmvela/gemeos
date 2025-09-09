@@ -2,7 +2,7 @@
  * Authentication and Authorization React Hooks
  */
 
-import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode, useRef } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { authService } from '@/services/auth.service';
 import { supabase } from '@/integrations/supabase/client';
 import type { 
@@ -17,11 +17,15 @@ import type {
 // AUTH CONTEXT
 // ============================================================
 
+type AuthState = 'authenticating' | 'authenticated' | 'unauthenticated';
+
 interface AuthContextType {
+  authState: AuthState;
   session: AuthSession | null;
   user: { id: string; email: string } | null;
   tenantContext: TenantContext | null;
-  loading: boolean;
+  loading: boolean; // Keep for backwards compatibility
+  enrichmentLoading: boolean;
   error: Error | null;
   switchTenant: (tenantId: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -39,16 +43,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // ============================================================
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [authState, setAuthState] = useState<AuthState>('authenticating');
   const [session, setSession] = useState<AuthSession | null>(null);
   const [tenantContext, setTenantContext] = useState<TenantContext | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [enrichmentLoading, setEnrichmentLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const isProcessingAuthRef = useRef(false);
-  const hasSubscribedRef = useRef(false);
+  
+  // Derive loading for backwards compatibility
+  const loading = authState === 'authenticating';
 
   const switchTenant = useCallback(async (tenantId: string) => {
     try {
-      setLoading(true);
+      setEnrichmentLoading(true);
       await authService.switchTenant(tenantId);
       // After switching tenant, reload the full session
       const fullSession = await authService.getCurrentSession();
@@ -62,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(err as Error);
       throw err;
     } finally {
-      setLoading(false);
+      setEnrichmentLoading(false);
     }
   }, []);
 
@@ -78,129 +84,165 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session, tenantContext]);
 
   useEffect(() => {
-    let subscription: any = null;
-    let finished = false;
+    let disposed = false;
 
-    async function initAuth() {
-      console.log('🔄 Initializing auth...');
-      
-      // 1) Subscribe FIRST so we don't miss SIGNED_IN events
-      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(
-        async (event, supabaseSession) => {
-          console.log('🔄 Auth state changed:', event, supabaseSession?.user?.email || 'no user');
-          
-          if (event === 'SIGNED_OUT' || !supabaseSession?.user) {
-            console.log('🔄 User signed out or no session, clearing state');
-            authService.clearSessionCache();
-            setSession(null);
-            setTenantContext(null);
-            if (!finished) {
-              finished = true;
-              setLoading(false);
-            }
-          } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-            if (supabaseSession?.user) {
-              console.log('🔄 User authenticated, fetching full session data...');
-              
-              // Only clear cache on actual sign in, not on initial session or token refresh
-              if (event === 'SIGNED_IN') {
-                authService.clearSessionCache();
-              }
-              
-              try {
-                // Use the auth service to get the full session with tenant data
-                const fullSession = await authService.getCurrentSession();
+    // 1) Subscribe first so we never miss an event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, supabaseSession) => {
+        console.log('🔄 Auth state changed:', event, supabaseSession?.user?.email || 'no user');
+        
+        // Handle sign out events
+        if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+          console.log('🔄 User signed out, clearing state');
+          authService.clearSessionCache();
+          setSession(null);
+          setTenantContext(null);
+          setAuthState('unauthenticated');
+        }
+        // Handle sign in and token refresh events (keeps session alive)
+        else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (supabaseSession?.user) {
+            console.log('🔄 User authenticated/refreshed');
+            
+            // Set basic session immediately - don't wait for enrichment
+            const basicSession: AuthSession = {
+              user_id: supabaseSession.user.id,
+              email: supabaseSession.user.email!,
+              tenants: [],
+              current_tenant: null,
+              is_platform_admin: supabaseSession.user.email === 'admin@gemeos.ai'
+            };
+            
+            setSession(basicSession);
+            setAuthState('authenticated');
+            
+            // Start enrichment asynchronously (don't await)
+            setEnrichmentLoading(true);
+            authService.getCurrentSession().then(fullSession => {
+              if (fullSession && !disposed) {
+                console.log('🔄 Full session loaded:', {
+                  email: fullSession.email,
+                  tenants: fullSession.tenants?.length || 0,
+                  isPlatformAdmin: fullSession.is_platform_admin,
+                  currentTenant: fullSession.current_tenant?.tenant?.name,
+                  role: fullSession.current_tenant?.role?.name,
+                  roleId: fullSession.current_tenant?.role_id
+                });
                 
-                if (fullSession) {
-                  console.log('🔄 Full session loaded:', {
-                    email: fullSession.email,
-                    tenants: fullSession.tenants?.length || 0,
-                    isPlatformAdmin: fullSession.is_platform_admin,
-                    currentTenant: fullSession.current_tenant?.tenant?.name
+                setSession(fullSession);
+                
+                // If user has a current tenant, get the tenant context
+                if (fullSession.current_tenant) {
+                  authService.getTenantContext().then(context => {
+                    if (!disposed && context) {
+                      setTenantContext(context);
+                    }
                   });
-                  
-                  setSession(fullSession);
-                  
-                  // If user has a current tenant, get the tenant context
-                  if (fullSession.current_tenant) {
-                    const context = await authService.getTenantContext();
-                    setTenantContext(context);
-                  }
-                } else {
-                  console.log('🔄 No session data available');
-                  setSession(null);
-                  setTenantContext(null);
                 }
-              } catch (error) {
-                console.error('🔄 Error loading session:', error);
-                setSession(null);
-                setTenantContext(null);
               }
-            }
-            if (!finished) {
-              finished = true;
-              setLoading(false);
-            }
+            }).catch(error => {
+              console.error('🔄 Error loading full session:', error);
+              // Keep basic session on error
+            }).finally(() => {
+              if (!disposed) {
+                setEnrichmentLoading(false);
+              }
+            });
           }
         }
-      );
-      
-      subscription = sub;
-      
-      // 2) Try to get current session with a short timeout
-      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
-      const currentSession = await Promise.race([
-        authService.getCurrentSession(),
-        timeout
-      ]);
-      
-      if (currentSession) {
-        console.log('🔄 Initial session loaded');
-        setSession(currentSession);
-        
-        if (currentSession.current_tenant) {
-          const context = await authService.getTenantContext();
-          setTenantContext(context);
-        }
       }
-      
-      finished = true;
-      setLoading(false);
-    }
+    );
 
-    initAuth();
+    // 2) Seed with current session
+    supabase.auth.getSession().then(({ data }) => {
+      if (disposed) return;
+      
+      if (data.session?.user) {
+        // Set basic session immediately
+        const basicSession: AuthSession = {
+          user_id: data.session.user.id,
+          email: data.session.user.email!,
+          tenants: [],
+          current_tenant: null,
+          is_platform_admin: data.session.user.email === 'admin@gemeos.ai'
+        };
+        
+        setSession(basicSession);
+        setAuthState('authenticated');
+        
+        // Start enrichment asynchronously
+        setEnrichmentLoading(true);
+        console.log('🔄 Starting enrichment for user:', data.session.user.email);
+        authService.getCurrentSession().then(fullSession => {
+          if (fullSession && !disposed) {
+            console.log('🔄 Enrichment complete:', {
+              email: fullSession.email,
+              tenants: fullSession.tenants?.length || 0,
+              currentTenant: fullSession.current_tenant?.tenant?.name,
+              role: fullSession.current_tenant?.role?.name,
+              isPlatformAdmin: fullSession.is_platform_admin
+            });
+            setSession(fullSession);
+            
+            if (fullSession.current_tenant) {
+              authService.getTenantContext().then(context => {
+                if (!disposed && context) {
+                  setTenantContext(context);
+                }
+              });
+            }
+          }
+        }).catch(error => {
+          console.error('🔄 Error loading initial full session:', error);
+        }).finally(() => {
+          if (!disposed) {
+            console.log('🔄 Enrichment loading complete');
+            setEnrichmentLoading(false);
+          }
+        });
+      } else {
+        // No session
+        setAuthState('unauthenticated');
+      }
+    });
 
     return () => {
       console.log('🔄 Cleaning up auth state listener');
-      if (subscription) {
-        subscription.unsubscribe();
-      }
+      disposed = true;
+      subscription.unsubscribe();
     };
   }, []); // Empty dependency array - we only want ONE auth listener
 
   const value: AuthContextType = {
+    authState,
     session,
     user: session ? { id: session.user_id, email: session.email } : null,
     tenantContext,
-    loading,
+    loading, // For backwards compatibility
+    enrichmentLoading,
     error,
     switchTenant,
     refresh: async () => {
       // Trigger auth state refresh by getting current session
-      const fullSession = await authService.getCurrentSession();
-      if (fullSession) {
-        setSession(fullSession);
-        if (fullSession.current_tenant) {
-          const context = await authService.getTenantContext();
-          setTenantContext(context);
+      setEnrichmentLoading(true);
+      try {
+        const fullSession = await authService.getCurrentSession();
+        if (fullSession) {
+          setSession(fullSession);
+          if (fullSession.current_tenant) {
+            const context = await authService.getTenantContext();
+            setTenantContext(context);
+          }
         }
+      } finally {
+        setEnrichmentLoading(false);
       }
     },
     hasPermission,
     isPlatformAdmin: session?.is_platform_admin || false,
-    isTenantAdmin: session?.current_tenant?.role.name === 'tenant_admin' || false,
-    isTeacher: session?.current_tenant?.role.name === 'teacher' || false,
-    isStudent: session?.current_tenant?.role.name === 'student' || false
+    isTenantAdmin: session?.current_tenant?.role?.name === 'tenant_admin' || false,
+    isTeacher: session?.current_tenant?.role?.name === 'teacher' || false,
+    isStudent: session?.current_tenant?.role?.name === 'student' || false
   };
 
   return (

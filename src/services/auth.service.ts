@@ -82,6 +82,9 @@ export class AuthService {
     }
   }
   
+  // Keep track of last good session to avoid forced logouts on transient errors
+  private lastGoodSession: AuthSession | null = null;
+
   /**
    * Internal method to actually fetch the session
    */
@@ -89,38 +92,26 @@ export class AuthService {
     try {
       console.log('🔍 fetchCurrentSession: Getting session from Supabase...');
       
-      // Use a short timeout (2 seconds) and race with getSession
-      const timeoutPromise = new Promise<{ data: { session: null }, error: Error }>((resolve) => 
-        setTimeout(() => {
-          console.log('🔍 fetchCurrentSession: Timeout reached, returning null session');
-          resolve({ data: { session: null }, error: new Error('Session fetch timeout') });
-        }, 2000) // 2 second timeout
-      );
+      // Single source of truth: Supabase - no aggressive timeouts
+      const { data, error } = await supabase.auth.getSession();
       
-      // Race between session fetch and timeout
-      const sessionResult = await Promise.race([
-        supabase.auth.getSession().then(result => {
-          console.log('🔍 fetchCurrentSession: getSession() completed successfully');
-          return result;
-        }).catch(error => {
-          console.error('🔍 fetchCurrentSession: getSession() threw error:', error);
-          return { data: { session: null }, error };
-        }),
-        timeoutPromise
-      ]);
+      if (error) {
+        console.warn('🔍 fetchCurrentSession: getSession error:', error);
+        // Return last good session on transient errors instead of forcing logout
+        return this.lastGoodSession;
+      }
       
-      const { data: { session }, error: sessionError } = sessionResult as any;
+      console.log('🔍 fetchCurrentSession: getSession() completed successfully');
+      const sessionResult = { data, error: null };
+      
+      const { session } = data;
       
       console.log('🔍 fetchCurrentSession: Session call completed, session exists:', !!session);
       
-      if (sessionError) {
-        console.error('🔍 fetchCurrentSession: Session error:', sessionError);
-        return null;
-      }
-      
       if (!session?.user) {
-        console.log('🔍 fetchCurrentSession: No session found, returning null');
-        return null;
+        console.log('🔍 fetchCurrentSession: No session found');
+        // Don't force null - return last good session if available
+        return this.lastGoodSession;
       }
       
       const user = session.user;
@@ -196,7 +187,8 @@ export class AuthService {
       console.log('🔍 getCurrentSession: Is platform admin:', isPlatformAdmin);
       console.log('🔍 getCurrentSession: Primary tenant:', primaryTenant?.tenants?.name);
       
-      return {
+      // Build the session object
+      const authSession: AuthSession = {
         user_id: user.id,
         email: user.email!,
         tenants: userTenants || [],
@@ -209,6 +201,11 @@ export class AuthService {
         } : null,
         is_platform_admin: isPlatformAdmin
       };
+      
+      // Save this as the last good session
+      this.lastGoodSession = authSession;
+      
+      return authSession;
     } catch (error) {
       console.error('🔍 fetchCurrentSession: Error:', error);
       return null;
@@ -216,13 +213,23 @@ export class AuthService {
   }
   
   /**
-   * Clear the session cache (useful when auth state changes)
+   * Clear the session cache - ONLY call on explicit logout
    */
   clearSessionCache(): void {
-    console.log('🔍 Clearing session cache');
+    console.log('🔍 Clearing session cache (logout)');
     this.sessionCache = null;
     this.sessionCacheTime = 0;
     this.sessionPromise = null;
+    this.lastGoodSession = null; // Also clear last good session on logout
+  }
+
+  /**
+   * Logout the current user
+   */
+  async logout(): Promise<void> {
+    console.log('🔍 Logging out user');
+    await supabase.auth.signOut();
+    this.clearSessionCache();
   }
 
   /**
