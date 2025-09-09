@@ -1,4 +1,4 @@
-import { Calendar, Settings, Users, BookOpen, Music, GraduationCap, ChevronRight, Upload, Building2, Shield, Home, FileText, Target, Brain, Monitor, UserCheck, Globe, Plus, Menu, X } from "lucide-react"
+import { Calendar, Settings, Users, BookOpen, Music, GraduationCap, ChevronRight, Upload, Building2, Shield, Home, FileText, Target, Brain, Monitor, UserCheck, Globe, Plus, Menu, X, School, UserCog, Lightbulb, Trophy } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useRef, useEffect } from "react"
 import { useUserAccessiblePaths } from "@/hooks/usePagePermissions"
@@ -66,7 +66,7 @@ const adminItems = [
   },
   {
     title: "Tenant Dashboard",
-    url: "/admin/tenant-dashboard",
+    url: "/tenant/dashboard",
     icon: Calendar,
   },
   {
@@ -94,7 +94,7 @@ const adminItems = [
 // Dashboard items - all dashboards consolidated
 const dashboardItems = [
   { title: "Platform Admin Dashboard", url: "/admin/dashboard", icon: Monitor },
-  { title: "Tenant Dashboard", url: "/admin/tenant-dashboard", icon: Calendar },
+  { title: "Tenant Dashboard", url: "/tenant/dashboard", icon: Calendar },
   { title: "Teacher Dashboard", url: "/teacher/dashboard", icon: GraduationCap },
   { title: "Student Dashboard", url: "/student/dashboard", icon: Users },
 ]
@@ -133,6 +133,14 @@ const developmentItems = [
   { title: "Welcome Page", url: "/welcome", icon: Home },
   { title: "Auth Page", url: "/auth", icon: Users },
   { title: "Unauthorized", url: "/unauthorized", icon: Shield },
+]
+
+// Teacher Area items
+const teacherAreaItems = [
+  { title: "Classes", url: "/teacher/classes", icon: School },
+  { title: "Students", url: "/teacher/students", icon: UserCog },
+  { title: "Learning Concepts", url: "/teacher/learning-concepts", icon: Lightbulb },
+  { title: "Learning Goals", url: "/teacher/learning-goals", icon: Trophy },
 ]
 
 const quickAccessPages = [
@@ -216,7 +224,7 @@ export function AppSidebar() {
   // Collapsible state for admin sections
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(
     currentPath.startsWith('/admin/dashboard') ||
-    currentPath.startsWith('/admin/tenant-dashboard') ||
+    currentPath.startsWith('/tenant/dashboard') ||
     currentPath.startsWith('/teacher/dashboard') ||
     currentPath.startsWith('/student/dashboard')
   )
@@ -237,6 +245,12 @@ export function AppSidebar() {
   )
   const [isAuthPagesExpanded, setIsAuthPagesExpanded] = useState(false)
   const [isDevelopmentExpanded, setIsDevelopmentExpanded] = useState(false)
+  const [isTeacherAreaExpanded, setIsTeacherAreaExpanded] = useState(
+    currentPath.startsWith('/teacher/classes') ||
+    currentPath.startsWith('/teacher/students') ||
+    currentPath.startsWith('/teacher/learning-concepts') ||
+    currentPath.startsWith('/teacher/learning-goals')
+  )
   
   // Flyout state management for collapsed sidebar
   const [activeFlyout, setActiveFlyout] = useState<string | null>(null)
@@ -414,6 +428,79 @@ export function AppSidebar() {
                     isVisible={state === 'collapsed' && activeFlyout === 'dashboards'}
                     onMouseEnter={() => handleFlyoutMouseEnter('dashboards')}
                     onMouseLeave={() => handleFlyoutMouseLeave('dashboards')}
+                    isValidPage={isValidPage}
+                  />
+                </div>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Teacher Area - Expandable Section */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <div 
+                  className="relative"
+                  onMouseEnter={() => handleFlyoutMouseEnter('teacher-area')}
+                  onMouseLeave={() => handleFlyoutMouseLeave('teacher-area')}
+                >
+                  <SidebarMenuButton
+                    onClick={() => {
+                      if (state === 'collapsed') {
+                        handleFlyoutClick('teacher-area')
+                      } else {
+                        setIsTeacherAreaExpanded(!isTeacherAreaExpanded)
+                      }
+                    }}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer text-white w-full justify-between bg-white/5 border border-white/20"
+                    tooltip="Teacher Area"
+                  >
+                    <div className="flex items-center gap-3">
+                      <GraduationCap className="h-4 w-4" />
+                      <span className="group-data-[collapsible=icon]:hidden">Teacher Area</span>
+                    </div>
+                    <ChevronRight 
+                      className={`h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${isTeacherAreaExpanded ? 'rotate-90' : ''}`} 
+                    />
+                  </SidebarMenuButton>
+                  
+                  {/* Regular expanded submenu */}
+                  {state !== 'collapsed' && isTeacherAreaExpanded && (
+                    <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
+                      {teacherAreaItems
+                        .filter(item => isValidPage(item.url))
+                        .map((item) => (
+                          <SidebarMenuSubItem key={item.title}>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink 
+                                to={item.url} 
+                                className={({ isActive }) => 
+                                  `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                                    isActive 
+                                      ? 'bg-[#2d2e5f] text-white font-medium' 
+                                      : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                                  }`
+                                }
+                              >
+                                <item.icon className="h-4 w-4" />
+                                <span>{item.title}</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                    </SidebarMenuSub>
+                  )}
+                  
+                  {/* Flyout panel for collapsed state */}
+                  <FlyoutPanel
+                    items={teacherAreaItems}
+                    title="Teacher Area"
+                    icon={GraduationCap}
+                    isVisible={state === 'collapsed' && activeFlyout === 'teacher-area'}
+                    onMouseEnter={() => handleFlyoutMouseEnter('teacher-area')}
+                    onMouseLeave={() => handleFlyoutMouseLeave('teacher-area')}
                     isValidPage={isValidPage}
                   />
                 </div>
