@@ -82,6 +82,7 @@ serve(async (req) => {
         replyTo: queuedEmail.reply_to || emailData.replyTo,
         tenantId: queuedEmail.tenant_id,
         templateType: queuedEmail.template_type,
+        templateVariables: queuedEmail.template_variables, // Include template variables from queue
       };
 
       // Update queue status to sending
@@ -217,40 +218,80 @@ serve(async (req) => {
       supabaseUrl: supabaseUrl.substring(0, 30) + '...'
     });
     
-    const baseUrl = isDevelopment ? 'http://localhost:8082' : 'https://app.gemeos.ai';
+    const baseUrl = isDevelopment ? 'http://localhost:8087' : 'https://app.gemeos.ai';
     console.log('🔍 [ENV] Using baseUrl:', baseUrl);
     
     // Create template variables with defaults
     // Build invite link - ensure we have invitation_id for invitation emails
     let inviteLink = tv.invite_link || emailToSend.invite_link;
     
-    // For invitation emails, always build the URL with invitation_id
-    if (!inviteLink && emailToSend.templateType === 'invitation') {
-      if (tv.invitation_id) {
-        inviteLink = `${baseUrl}/accept-invite?tenant=${emailToSend.tenantId}&token=${tv.invitation_id}`;
-        console.log('📧 [INVITATION] Built invite URL:', inviteLink);
+    // Debug template variables
+    console.log('🔍 [TEMPLATE_VARS] Received:', {
+      templateType: emailToSend.templateType,
+      hasInvitationUrl: !!tv.invitationUrl,
+      invitationUrl: tv.invitationUrl,
+      invitation_id: tv.invitation_id,
+      allKeys: Object.keys(tv)
+    });
+    
+    // Special handling for different invitation types
+    if (emailToSend.templateType === 'teacher_invitation') {
+      // For teacher invitations, always use the provided invitationUrl
+      if (tv.invitationUrl) {
+        inviteLink = tv.invitationUrl;
+        console.log('📧 [TEACHER_INVITATION] Using provided invite URL:', inviteLink);
       } else {
-        console.error('❌ [INVITATION] Missing invitation_id for invitation email!', {
-          templateType: emailToSend.templateType,
+        console.error('❌ [TEACHER_INVITATION] Missing invitationUrl!', {
+          templateVars: Object.keys(tv),
+          tv: tv
+        });
+        // Fallback - this shouldn't happen but provide a reasonable default
+        inviteLink = `${baseUrl}/teacher-setup`;
+      }
+    } else if (emailToSend.templateType === 'invitation' || emailToSend.templateType === 'tenant_admin_invitation') {
+      // For tenant admin invitations, build the URL with invitation_id
+      if (!inviteLink && tv.invitation_id) {
+        inviteLink = `${baseUrl}/accept-invite?tenant=${emailToSend.tenantId}&token=${tv.invitation_id}`;
+        console.log('📧 [TENANT_INVITATION] Built invite URL:', inviteLink);
+      } else if (!inviteLink) {
+        console.error('❌ [TENANT_INVITATION] Missing invitation_id!', {
           templateVars: Object.keys(tv)
         });
         inviteLink = `${baseUrl}/accept-invite?tenant=${emailToSend.tenantId}`;
       }
     }
     
+    console.log('🔍 [INVITE_LINK] Final inviteLink:', inviteLink, 'templateType:', emailToSend.templateType);
+    
+    // Debug: Check if inviteLink has the token
+    if (emailToSend.templateType === 'teacher_invitation') {
+      console.log('📧 [TEACHER_DEBUG] Final teacher invitation URL:', inviteLink);
+      console.log('📧 [TEACHER_DEBUG] Contains token?:', inviteLink.includes('token='));
+      console.log('📧 [TEACHER_DEBUG] Original tv.invitationUrl:', tv.invitationUrl);
+    }
+    
     const templateVars = {
+      // Include any additional vars passed from client first
+      ...tv,
+      
+      // Then override with our computed values
       // Basic template variables
-      tenant_name: tv.tenant_name || 'Your organization',
+      tenant_name: tv.tenant_name || tv.tenantName || 'Your organization',
       tenant_slug: tv.tenant_slug || 'org', 
       tenant_id: emailToSend.tenantId,
       inviter_name: tv.inviter_name || 'Platform Admin',
       support_email: tv.support_email || DEFAULT_SUPPORT_EMAIL,
       expires_at: tv.expires_at || new Date(Date.now() + 7*24*60*60*1000).toISOString(),
       login_url: tv.login_url || `${baseUrl}/login`,
-      invite_link: inviteLink,
       
-      // Include any additional vars passed from client
-      ...tv,
+      // IMPORTANT: These should use the computed inviteLink, not the raw tv.invitationUrl
+      invite_link: inviteLink,
+      invitationUrl: inviteLink, // Add both formats for compatibility
+      
+      // Teacher-specific variables (keep from tv if present)
+      teacherName: tv.teacherName || '',
+      teacherEmail: tv.teacherEmail || '',
+      domains: tv.domains || '',
     };
 
     // Function to replace template variables in text
