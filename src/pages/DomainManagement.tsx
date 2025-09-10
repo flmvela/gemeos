@@ -10,6 +10,7 @@ import { useDomains, Domain } from '@/hooks/useDomains';
 import { DomainFormModal } from '@/components/domains/DomainFormModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toStringSafe } from '@/lib/utils';
+import { PermissionGuard } from '@/components/PermissionGuard';
 
 const DomainManagement = () => {
   const { domains, loading, createDomain, updateDomain, deleteDomain } = useDomains();
@@ -60,14 +61,15 @@ const DomainManagement = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Domain Management</h1>
-        <p className="text-muted-foreground mt-2">
-          Create and manage learning domains for the platform
-        </p>
-      </div>
+    <PermissionGuard resource="page:domain_management" action="admin">
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Domain Management</h1>
+          <p className="text-muted-foreground mt-2">
+            Create and manage learning domains for the platform
+          </p>
+        </div>
 
       {/* Stats Card */}
       <Card>
@@ -221,7 +223,8 @@ const DomainManagement = () => {
         onClose={() => setEditingDomain(undefined)}
         onSubmit={handleUpdateDomain}
       />
-    </div>
+      </div>
+    </PermissionGuard>
   );
 };
 

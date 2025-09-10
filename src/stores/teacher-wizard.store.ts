@@ -203,16 +203,21 @@ export const useTeacherWizardStore = create<TeacherWizardStore>()(
         }),
 
       updateData: (step, stepData) =>
-        set((state) => ({
-          data: {
+        set((state) => {
+          const updatedData = {
             ...state.data,
             [step]: {
               ...state.data[step],
               ...stepData
             }
-          },
-          isDirty: true
-        })),
+          };
+          console.log(`TeacherWizardStore - updateData called for step '${step}':`, stepData);
+          console.log('TeacherWizardStore - New data state:', updatedData);
+          return {
+            data: updatedData,
+            isDirty: true
+          };
+        }),
 
       setData: (data) =>
         set((state) => ({

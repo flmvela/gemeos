@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { FileUploadDropzone } from '@/components/upload/FileUploadDropzone';
 import { useUploadFiles } from '@/hooks/useFileUpload';
 import { useDomains } from '@/hooks/useDomains';
+import { useDomainSlug, domainNameToSlug } from '@/hooks/useDomainSlug';
 
 interface AdminDomainPageProps {
   domainName: string;
@@ -30,13 +31,19 @@ type ContentType = 'concept' | 'learning_goal' | 'exercise';
 
 export function AdminDomainPage({ domainName }: AdminDomainPageProps) {
   const navigate = useNavigate();
-  const { domainId } = useParams();
+  const { domainId, slug } = useParams();
   const [showUpload, setShowUpload] = useState(false);
   
   const { domains } = useDomains();
   const { uploadFiles, isUploading, uploadProgress } = useUploadFiles();
   
-  const domain = domains.find(d => d.id === domainId);
+  // Support both slug and domainId for backward compatibility
+  const identifier = slug || domainId || '';
+  const { domain: resolvedDomain } = useDomainSlug(identifier);
+  const domain = resolvedDomain || domains.find(d => d.id === domainId);
+  
+  // Generate slug for navigation - prioritize slug param if available, otherwise generate from domain name
+  const domainSlug = slug || (domain ? domainNameToSlug(domain.name) : domainNameToSlug(domainName));
 
   // Mock data for the dashboard
   const mockData = {
@@ -94,7 +101,7 @@ export function AdminDomainPage({ domainName }: AdminDomainPageProps) {
               icon={BookOpen}
               count={mockData.conceptsCount}
               colorScheme="purple"
-              onClick={() => navigate(`/admin/domain/${domainId}/concepts`)}
+              onClick={() => navigate(`/admin/domains/${domainSlug}/concepts`)}
             />
             <FeatureCard
               title="Learning Goals"
@@ -102,7 +109,7 @@ export function AdminDomainPage({ domainName }: AdminDomainPageProps) {
               icon={Target}
               count={mockData.goalsCount}
               colorScheme="blue"
-              onClick={() => navigate(`/admin/domain/${domainId}/goals`)}
+              onClick={() => navigate(`/admin/domains/${domainSlug}/goals`)}
             />
             <FeatureCard
               title="Exercises"
@@ -137,7 +144,7 @@ export function AdminDomainPage({ domainName }: AdminDomainPageProps) {
               title="Train the AI"
               description="Train the AI (your digital twin) to support teaching and content creation."
               icon={Bot}
-              onClick={() => navigate(`/admin/domain/${domainId}/ai-guidance`)}
+              onClick={() => navigate(`/admin/domains/${domainSlug}/ai-guidance`)}
             />
             <FeatureCard
               title="Upload Data"

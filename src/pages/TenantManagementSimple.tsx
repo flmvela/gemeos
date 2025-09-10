@@ -10,11 +10,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Building2, Calendar, Users } from 'lucide-react';
 import { TenantWizard } from '@/components/tenant-management/TenantWizard';
 import { useTenantWizardStore } from '@/stores/tenant-wizard.store';
+import { useNavigate } from 'react-router-dom';
 import { tenantService } from '@/services/tenant.service';
 import type { Tenant } from '@/types/auth.types';
 import { useToast } from '@/hooks/use-toast';
 
 export const TenantManagementSimple: React.FC = () => {
+  const navigate = useNavigate();
   const { openCreateWizard } = useTenantWizardStore();
   const { toast } = useToast();
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -72,10 +74,16 @@ export const TenantManagementSimple: React.FC = () => {
           </p>
         </div>
         
-        <Button onClick={openCreateWizard} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Tenant
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => navigate('/admin/tenants/create')} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Tenant (New)
+          </Button>
+          <Button onClick={openCreateWizard} variant="outline" className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Tenant (Modal)
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -156,9 +164,24 @@ export const TenantManagementSimple: React.FC = () => {
                     <Badge className={getStatusColor(tenant.status)}>
                       {tenant.status}
                     </Badge>
-                    <Button variant="outline" size="sm">
-                      Manage
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => navigate(`/admin/tenants/${tenant.id}`)}
+                        className="border border-gray-300 text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                      >
+                        Edit
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => navigate(`/admin/tenants/${tenant.id}/edit`)}
+                        className="text-blue-600 border-blue-200 hover:bg-blue-50 transition-all duration-200"
+                      >
+                        Wizard
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}

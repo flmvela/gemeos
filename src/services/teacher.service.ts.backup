@@ -1,0 +1,618 @@
+/**
+ * Teacher Service
+ * Handles all teacher-related database operations
+ */
+
+import { supabase } from '@/integrations/supabase/client';
+import type { TeacherWizardData } from '@/stores/teacher-wizard.store';
+import { emailService } from '@/services/email.service';
+
+export interface Teacher {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  first_name: string;
+  last_name: string;
+  phone_number?: string;
+  bio?: string;
+  avatar_url?: string;
+  status: 'active' | 'inactive' | 'on_leave' | 'terminated';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeacherDomain {
+  id: string;
+  teacher_id: string;
+  domain_id: string;
+  is_primary: boolean;
+  certification_level: 'basic' | 'intermediate' | 'advanced' | 'expert';
+  max_students?: number;
+  preferred_class_size?: number;
+}
+
+export interface TeacherSchedule {
+  id: string;
+  teacher_id: string;
+  day_of_week: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+  timezone: string;
+}
+
+export interface TeacherModality {
+  id: string;
+  teacher_id: string;
+  modality: 'in-person' | 'online' | 'hybrid';
+  is_preferred: boolean;
+}
+
+export interface TeacherSettings {
+  id: string;
+  teacher_id: string;
+  min_class_duration: number;
+  max_classes_per_day: number;
+  buffer_between_classes: number;
+  notification_preferences: any;
+  custom_permissions: any;
+  auto_accept_students: boolean;
+  max_pending_enrollments: number;
+}
+
+class TeacherService {
+  /**
+   * Create a new teacher from wizard data
+   */
+  async createTeacher(wizardData: TeacherWizardData, tenantId: string): Promise<Teacher> {
+    try {
+      console.log('Starting teacher creation with tenantId:', tenantId);
+      
+      // Validate tenant ID upfront
+      if (!tenantId) {
+        throw new Error('Tenant ID is required to create a teacher');
+      }
+      
+      // Start a transaction
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // 1. Create invitation (NOT auth user - aligning with tenant admin flow)
+      let invitationUrl: string | null = null;
+      let invitationId: string | null = null;
+      
+      if (wizardData.basic.sendInvitation) {
+        // Ensure tenantId is valid
+        if (!tenantId) {
+          throw new Error('No tenant ID available for teacher creation');
+        }
+        
+        console.log('Creating teacher invitation (aligned flow):', {
+          tenantId,
+          email: wizardData.basic.email,
+          firstName: wizardData.basic.firstName,
+          lastName: wizardData.basic.lastName
+        });
+        
+        // Generate a unique invitation token
+        const invitationToken = crypto.randomUUID();
+        
+        // Get role ID for teacher
+        const { data: teacherRole } = await supabase
+          .from('user_roles')
+          .select('id')
+          .eq('name', 'teacher')
+          .single();
+        
+        if (!teacherRole) {
+          // Create teacher role if it doesn't exist
+          const { data: newRole, error: roleError } = await supabase
+            .from('user_roles')
+            .insert({
+              name: 'teacher',
+              display_name: 'Teacher',
+              description: 'Teacher role with class management permissions'
+            })
+            .select()
+            .single();
+          
+          if (roleError) throw roleError;
+          teacherRole.id = newRole.id;
+        }
+        
+        // Store the invitation with all teacher data in metadata
+        const { data: invitation, error: invitationError } = await supabase
+          .from('invitations')
+          .insert({
+            email: wizardData.basic.email,
+            tenant_id: tenantId,
+            role_id: teacherRole.id,
+            role_name: 'teacher',
+            status: 'pending',
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+            invited_by: user.id,
+            invitation_token: invitationToken,
+            metadata: {
+              // Store all teacher profile data
+              firstName: wizardData.basic.firstName,
+              lastName: wizardData.basic.lastName,
+              phoneNumber: wizardData.basic.phoneNumber,
+              // Store wizard data for later processing
+              domains: wizardData.domains,
+              schedule: wizardData.schedule,
+              permissions: wizardData.permissions,
+              notifications: wizardData.review?.notifications || {
+                emailNotifications: true,
+                smsNotifications: false,
+                inAppNotifications: true
+              },
+              // Additional setup options
+              sendWelcomeEmail: wizardData.review?.sendWelcomeEmail !== false,
+              createInitialClass: wizardData.review?.createInitialClass === true
+            }
+          })
+          .select()
+          .single();
+        
+        if (invitationError) {
+          console.error('Failed to create invitation record:', invitationError);
+          throw new Error(`Failed to create teacher invitation: ${invitationError.message}`);
+        }
+        
+        invitationId = invitation.id;
+        
+        // Create the invitation URL with the token
+        invitationUrl = `${window.location.origin}/teacher-setup?token=${invitationToken}`;
+        
+      } else if (wizardData.basic.temporaryPassword) {
+        // Get current session for authorization
+        const { data: currentSession } = await supabase.auth.getSession();
+        if (!currentSession?.session?.access_token) {
+          throw new Error('No authentication session found');
+        }
+        
+        // Prepare the payload with trimmed values
+        const payload = {
+          email: wizardData.basic.email?.trim(),
+          firstName: wizardData.basic.firstName?.trim(),
+          lastName: wizardData.basic.lastName?.trim(),
+          tenantId: tenantId,
+          temporaryPassword: wizardData.basic.temporaryPassword
+        };
+
+        console.log('create-teacher-user payload (with password):', payload);
+        
+        // Validate payload before sending
+        if (!payload.email || !payload.firstName || !payload.lastName || !payload.tenantId) {
+          console.error('Invalid payload - missing required fields:', {
+            hasEmail: !!payload.email,
+            hasFirstName: !!payload.firstName,
+            hasLastName: !!payload.lastName,
+            hasTenantId: !!payload.tenantId
+          });
+          throw new Error('Missing required teacher information');
+        }
+
+        // Use edge function to create user with temporary password (no email sent)
+        // Important: We need to stringify the body explicitly for edge functions
+        const requestBody = JSON.stringify(payload);
+        console.log('Sending request body (with password):', requestBody);
+        
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('create-teacher-user', {
+          body: requestBody,
+          headers: {
+            'Authorization': `Bearer ${currentSession.session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+        });
+        
+        if (fnError) {
+          // Try to parse the error response properly
+          let errorMessage = fnError.message || 'Failed to create teacher user';
+          
+          // If the error context has a body (ReadableStream), try to read it
+          if ((fnError as any)?.context?.body) {
+            try {
+              const body = (fnError as any).context.body;
+              if (body instanceof ReadableStream) {
+                const reader = body.getReader();
+                const { value } = await reader.read();
+                const errorText = new TextDecoder().decode(value);
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.error || errorMessage;
+              } else if (typeof body === 'string') {
+                const errorData = JSON.parse(body);
+                errorMessage = errorData.error || errorMessage;
+              }
+            } catch (parseErr) {
+              console.error('Failed to parse error response:', parseErr);
+            }
+          }
+          
+          console.error('Edge function invocation failed:', errorMessage);
+          throw new Error(errorMessage);
+        }
+        
+        if (!fnData?.success) {
+          console.error('Edge function returned error payload:', fnData);
+          throw new Error(fnData?.error || 'Failed to create teacher user');
+        }
+        
+        userId = fnData.userId;
+      } else {
+        throw new Error('Either invitation or temporary password must be provided');
+      }
+
+      // 2. Create teacher profile
+      const { data: teacher, error: teacherError } = await supabase
+        .from('teachers')
+        .insert({
+          user_id: userId,
+          tenant_id: tenantId,
+          first_name: wizardData.basic.firstName,
+          last_name: wizardData.basic.lastName,
+          phone_number: wizardData.basic.phoneNumber,
+          status: 'active',
+          created_by: user.id
+        })
+        .select()
+        .single();
+
+      if (teacherError) throw teacherError;
+
+      // 3. Add teacher to user_tenants with teacher role
+      const { data: teacherRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'teacher')
+        .single();
+
+      if (!teacherRole) {
+        // Create teacher role if it doesn't exist
+        const { data: newRole, error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            name: 'teacher',
+            display_name: 'Teacher',
+            description: 'Teacher role with class management permissions'
+          })
+          .select()
+          .single();
+
+        if (roleError) throw roleError;
+        teacherRole.id = newRole.id;
+      }
+
+      const { error: userTenantError } = await supabase
+        .from('user_tenants')
+        .insert({
+          user_id: userId,
+          tenant_id: tenantId,
+          role_id: teacherRole.id,
+          email: wizardData.basic.email,
+          status: 'active',
+          is_primary: true
+        });
+
+      if (userTenantError && userTenantError.code !== '23505') { // Ignore duplicate key error
+        throw userTenantError;
+      }
+
+      // 4. Add teacher domains
+      if (wizardData.domains.primaryDomain) {
+        const { error: primaryDomainError } = await supabase
+          .from('teacher_domains')
+          .insert({
+            teacher_id: teacher.id,
+            domain_id: wizardData.domains.primaryDomain.id,
+            is_primary: true,
+            certification_level: wizardData.domains.primaryDomain.certificationLevel || 'intermediate',
+            max_students: wizardData.domains.maxStudents,
+            preferred_class_size: wizardData.domains.preferredClassSize
+          });
+
+        if (primaryDomainError) throw primaryDomainError;
+      }
+
+      // Add additional domains
+      if (wizardData.domains.additionalDomains.length > 0) {
+        const additionalDomainsData = wizardData.domains.additionalDomains.map(domain => ({
+          teacher_id: teacher.id,
+          domain_id: domain.id,
+          is_primary: false,
+          certification_level: domain.certificationLevel || 'basic'
+        }));
+
+        const { error: additionalDomainsError } = await supabase
+          .from('teacher_domains')
+          .insert(additionalDomainsData);
+
+        if (additionalDomainsError) throw additionalDomainsError;
+      }
+
+      // 5. Add teaching modalities
+      if (wizardData.domains.teachingModalities.length > 0) {
+        const modalitiesData = wizardData.domains.teachingModalities.map(modality => ({
+          teacher_id: teacher.id,
+          modality: modality,
+          is_preferred: wizardData.domains.teachingModalities[0] === modality
+        }));
+
+        const { error: modalitiesError } = await supabase
+          .from('teacher_modalities')
+          .insert(modalitiesData);
+
+        if (modalitiesError) throw modalitiesError;
+      }
+
+      // 6. Add teacher schedule
+      const scheduleData = Object.entries(wizardData.schedule.availability)
+        .filter(([_, daySchedule]) => daySchedule.available)
+        .map(([day, daySchedule]) => ({
+          teacher_id: teacher.id,
+          day_of_week: day,
+          start_time: daySchedule.start || '09:00',
+          end_time: daySchedule.end || '17:00',
+          is_available: daySchedule.available,
+          timezone: wizardData.schedule.timezone
+        }));
+
+      if (scheduleData.length > 0) {
+        const { error: scheduleError } = await supabase
+          .from('teacher_schedules')
+          .insert(scheduleData);
+
+        if (scheduleError) throw scheduleError;
+      }
+
+      // 7. Update teacher settings (created automatically by trigger)
+      const { error: settingsError } = await supabase
+        .from('teacher_settings')
+        .update({
+          min_class_duration: wizardData.schedule.minClassDuration,
+          max_classes_per_day: wizardData.schedule.maxClassesPerDay,
+          buffer_between_classes: wizardData.schedule.bufferBetweenClasses,
+          notification_preferences: wizardData.review.notificationPreferences,
+          custom_permissions: wizardData.permissions.permissions,
+          auto_accept_students: false,
+          max_pending_enrollments: 10
+        })
+        .eq('teacher_id', teacher.id);
+
+      if (settingsError) throw settingsError;
+
+      // 8. Send custom invitation email if requested
+      if (wizardData.basic.sendInvitation && invitationUrl) {
+        try {
+          // Get tenant information for the email
+          const { data: tenantData } = await supabase
+            .from('tenants')
+            .select('name, slug')
+            .eq('id', tenantId)
+            .single();
+          
+          const tenantName = tenantData?.name || 'Gemeos Academy';
+          
+          // Get the list of domains for the email
+          const domainsList = [];
+          if (wizardData.domains.primaryDomain) {
+            domainsList.push(wizardData.domains.primaryDomain.name);
+          }
+          wizardData.domains.additionalDomains.forEach(d => domainsList.push(d.name));
+          
+          // Send the invitation email through the email service (Resend)
+          const emailResult = await emailService.queueEmailForTenant(tenantId, {
+            templateType: 'teacher_invitation',
+            to: wizardData.basic.email,
+            templateVariables: {
+              tenantName,
+              teacherName: `${wizardData.basic.firstName} ${wizardData.basic.lastName}`,
+              teacherEmail: wizardData.basic.email,
+              invitationUrl,
+              domains: domainsList.join(', ')
+            },
+            priority: 'high'
+          });
+          
+          if (emailResult.success && emailResult.queueId) {
+            console.log('Teacher invitation email queued successfully with ID:', emailResult.queueId);
+            
+            // Process the queue immediately to send the email via Resend
+            try {
+              // Use the processQueueItemForTenant method to send the email
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session?.access_token) {
+                const { data, error } = await supabase.functions.invoke('send-email', {
+                  body: { 
+                    queueId: emailResult.queueId, 
+                    tenantId 
+                  },
+                  headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                  },
+                });
+                
+                if (error) {
+                  console.error('Failed to send teacher invitation email:', error);
+                } else {
+                  console.log('Teacher invitation email sent successfully via Resend');
+                }
+              }
+            } catch (processError) {
+              console.error('Error processing email queue:', processError);
+            }
+          } else {
+            console.error('Failed to queue invitation email:', emailResult.error);
+          }
+        } catch (emailError) {
+          console.error('Error sending teacher invitation email:', emailError);
+          // Don't throw - teacher creation was successful even if email fails
+        }
+      }
+
+      return teacher;
+
+    } catch (error) {
+      console.error('Error creating teacher:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all teachers for a tenant
+   */
+  async getTeachersByTenant(tenantId: string): Promise<Teacher[]> {
+    const { data, error } = await supabase
+      .from('teachers')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('last_name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
+   * Get a single teacher with all related data
+   */
+  async getTeacherById(teacherId: string) {
+    const { data: teacher, error: teacherError } = await supabase
+      .from('teachers')
+      .select(`
+        *,
+        teacher_domains (
+          *,
+          domain:domains (*)
+        ),
+        teacher_modalities (*),
+        teacher_schedules (*),
+        teacher_settings (*)
+      `)
+      .eq('id', teacherId)
+      .single();
+
+    if (teacherError) throw teacherError;
+    return teacher;
+  }
+
+  /**
+   * Update teacher profile
+   */
+  async updateTeacher(teacherId: string, updates: Partial<Teacher>) {
+    const { data, error } = await supabase
+      .from('teachers')
+      .update(updates)
+      .eq('id', teacherId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Delete a teacher (soft delete by setting status)
+   */
+  async deleteTeacher(teacherId: string) {
+    const { error } = await supabase
+      .from('teachers')
+      .update({ status: 'terminated' })
+      .eq('id', teacherId);
+
+    if (error) throw error;
+  }
+
+  /**
+   * Check teacher availability for a specific date/time
+   */
+  async checkAvailability(
+    teacherId: string, 
+    date: string, 
+    startTime: string, 
+    endTime: string
+  ): Promise<boolean> {
+    const { data, error } = await supabase
+      .rpc('is_teacher_available', {
+        p_teacher_id: teacherId,
+        p_date: date,
+        p_start_time: startTime,
+        p_end_time: endTime
+      });
+
+    if (error) throw error;
+    return data || false;
+  }
+
+  /**
+   * Get teacher's full schedule
+   */
+  async getTeacherSchedule(teacherId: string) {
+    const { data, error } = await supabase
+      .rpc('get_teacher_full_schedule', {
+        p_teacher_id: teacherId
+      });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
+   * Add teacher unavailability period
+   */
+  async addUnavailability(
+    teacherId: string,
+    startDate: string,
+    endDate: string,
+    reason?: string
+  ) {
+    const { data, error } = await supabase
+      .from('teacher_unavailability')
+      .insert({
+        teacher_id: teacherId,
+        start_date: startDate,
+        end_date: endDate,
+        reason
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Get teachers by domain
+   */
+  async getTeachersByDomain(domainId: string, tenantId: string) {
+    const { data, error } = await supabase
+      .from('teacher_domains')
+      .select(`
+        *,
+        teacher:teachers!inner (
+          *
+        )
+      `)
+      .eq('domain_id', domainId)
+      .eq('teacher.tenant_id', tenantId);
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
+   * Update teacher settings
+   */
+  async updateTeacherSettings(teacherId: string, settings: Partial<TeacherSettings>) {
+    const { data, error } = await supabase
+      .from('teacher_settings')
+      .update(settings)
+      .eq('teacher_id', teacherId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+}
+
+export const teacherService = new TeacherService();

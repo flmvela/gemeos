@@ -1,336 +1,344 @@
-# Gemeos Design System Style Guide
-
-## Overview
-This style guide is derived from the UI screens found in the `context/screens` folder and establishes consistent design patterns for the Gemeos educational platform.
-
-## Color Palette
-
-### Primary Colors
-- **Deep Purple**: `#110D59` - Main brand color, used for navigation bars, primary backgrounds
-- **Medium Purple**: `#28246F` - Secondary brand color, used for icons and accent elements
-- **Purple Gray**: `#7E7BB3` - Tertiary color for secondary text and borders
-
-### Interactive Colors (from Button.svg analysis)
-- **Primary Blue**: `#0B5FAE` - Main action buttons, primary CTAs
-- **Secondary Blue**: `#0E77D9` - Secondary action buttons
-- **Tertiary Blue**: `#08437A` - Less prominent action buttons
-- **Disabled Gray**: `#E3E4E8` - Disabled button backgrounds
-- **Disabled Text**: `#D3D4DA` - Disabled button text
-
-### Extended Color Palette (from Color Style.svg analysis)
-#### Grayscale Tokens
-- **Darkest**: `#2B283D` - Deep dark for high contrast text
-- **Dark**: `#4C4958` - Dark gray for secondary text
-- **Medium**: `#55555F` - Medium gray for muted content
-- **Light**: `#7D7A89` - Light gray for borders and dividers
-- **Lightest**: `#D9D9D9` - Very light gray for subtle backgrounds
-
-#### Purple Scale Extended
-- **Purple 900**: `#110D59` - Main brand (unchanged)
-- **Purple 700**: `#28246F` - Secondary brand (unchanged) 
-- **Purple 600**: `#44408A` - Medium purple variant
-- **Purple 400**: `#7E7BB3` - Light purple for text (unchanged)
-- **Purple 300**: `#B4B1E6` - Very light purple
-- **Purple 100**: `#DAD9F5` - Ultra light purple tint
-
-#### Blue Action Scale
-- **Blue 900**: `#08437A` - Darkest blue for tertiary actions
-- **Blue 700**: `#0B5FAE` - Primary action blue (unchanged)
-- **Blue 500**: `#0E77D9` - Secondary action blue (unchanged)
-
-### Accent Colors
-- **Light Blue**: `#A3D1FC` - Used for active states and highlights
-- **Magenta**: `#AF20C7` - Used for status indicators and avatars
-- **White**: `#FFFFFF` - Primary text color and card backgrounds
-
-### Background Colors
-- **Light Gray**: `#F1F2F4` - Main application background
-- **White**: `#FFFFFF` - Card and component backgrounds
-
-### Status Colors (from PNG analysis)
-- **Red**: Used for "Hard" difficulty/priority indicators
-- **Orange**: Used for "Medium" difficulty/priority indicators
-- **Green**: Used for completion/success states
-
-## Typography
-
-### Hierarchy (from Text Style.svg analysis)
-- **Large Text**: `#222127` - Primary headings and important labels
-- **Medium Text**: `#55555F` - Secondary text, descriptions, form labels
-- **Light Text**: `#B3B1BB` - Placeholder text, helper text, timestamps
-
-### Typography Scale
-Based on the comprehensive text style specifications:
-- **Heading 1**: Large, bold for primary page titles
-- **Heading 2**: Medium-large for section headers
-- **Heading 3**: Medium for subsection headers
-- **Body Large**: Standard text for main content
-- **Body Medium**: Default text size for most UI elements
-- **Body Small**: Smaller text for captions and metadata
-- **Caption**: Very small text for timestamps and fine print
-
-### Font Characteristics
-- Clean, sans-serif typography (Inter font family)
-- Excellent contrast ratios across all text colors
-- Consistent spacing and alignment
-- Multiple font weights available (400, 500, 600, 700)
-
-## Layout Patterns
-
-### Sidebar Navigation
-- **Width**: 258px fixed width
-- **Height**: Full viewport (900px+)
-- **Background**: Deep Purple (`#110D59`)
-- **Padding**: 16px horizontal margins
-- **Border Radius**: 8px for internal components, 10px for certain elements
-
-### Cards and Components
-- **Border Radius**: 8px standard, 10px for elevated components
-- **Spacing**: 16px base unit for margins and padding
-- **Shadows**: Subtle elevation for cards and dropdowns
-
-### Grid System
-- **List Items**: Consistent 48px height for navigation items
-- **Icon Size**: 12px radius for circular elements, varied sizes for functional icons
-- **Spacing**: 16px standard gap between components
-
-## Component Patterns
-
-### Button System (from Button.svg analysis)
-Based on the comprehensive button design specifications:
-
-#### Primary Buttons
-- **Background**: `#0B5FAE` (Primary Blue)
-- **Height**: 51px
-- **Border Radius**: 8px
-- **Text Color**: White
-- **Font Weight**: Medium
-- **Use Case**: Main actions, CTAs
-
-#### Secondary Buttons  
-- **Background**: `#0E77D9` (Lighter Blue)
-- **Height**: 51px
-- **Border Radius**: 8px
-- **Text Color**: White
-- **Font Weight**: Medium
-- **Use Case**: Secondary actions
-
-#### Tertiary Buttons
-- **Background**: `#08437A` (Darker Blue)
-- **Height**: 51px  
-- **Border Radius**: 8px
-- **Text Color**: White
-- **Font Weight**: Medium
-- **Use Case**: Less prominent actions
-
-#### Button States
-- **Normal**: Solid background with brand colors
-- **Hover**: 5% opacity overlay (`fill-opacity="0.05"`)
-- **Click**: 15% opacity overlay (`fill-opacity="0.15"`)
-- **Disabled**: `#E3E4E8` (Light Gray) with `#D3D4DA` (Gray) text
-
-### Form Components (from Component.svg analysis)
-Advanced form elements and interactive components:
-
-#### Input Fields (from Text Form.svg analysis)
-- **Background**: `#F8F9FD` - Light blue-gray for input backgrounds
-- **Border**: Subtle border with 7.5px radius
-- **Height**: 48px standard height for text inputs
-- **Text Color**: `#55555F` (Medium gray) for input text
-- **Placeholder Text**: `#B3B1BB` (Light gray) for placeholder text
-- **Focus States**: Blue outline matching button colors
-- **Label Text**: `#55555F` positioned above input fields
-
-#### Navigation Elements
-- **Active States**: Light blue highlight (`#A3D1FC`)
-- **Hover States**: Subtle opacity changes  
-- **Icons**: Line-based icons with 1.5px stroke width
-- **Text**: White text on dark purple background
-
-#### Complex Components
-- **Headers**: Navigation bars with `#110D59` background
-- **Sub-headers**: Secondary information areas
-- **Card Containers**: White backgrounds with proper spacing
-- **Interactive Lists**: Hover states and selection indicators
-
-### Status Indicators
-- **Badges**: Rounded rectangles with colored backgrounds
-- **Priority Levels**: Color-coded (Red = Hard, Orange = Medium, Green = Complete)
-- **User Avatars**: Circular with colored backgrounds
-
-### Data Display
-- **Tables/Lists**: Clean rows with proper spacing
-- **Cards**: White backgrounds with subtle shadows
-- **Statistics**: Clear numerical displays with descriptive labels
-
-## Spacing System
-
-### Base Units
-- **Small**: 8px
-- **Medium**: 16px (primary spacing unit)
-- **Large**: 24px
-- **Extra Large**: 48px
-
-### Component Spacing
-- **Card Padding**: 16px
-- **List Item Height**: 48px
-- **Icon Margins**: 8px from text
-- **Section Gaps**: 24px between major sections
-
-## Interactive States
-
-### Hover Effects
-- Subtle opacity changes (0.8-0.9)
-- Background color shifts for clickable elements
-- Smooth transitions (0.2s ease)
-
-### Active States
-- Distinct color changes using accent colors
-- Clear visual feedback for current selection
-- Maintained accessibility contrast
-
-### Focus States
-- Visible focus indicators for keyboard navigation
-- High contrast outlines
-- Consistent with brand colors
-
-## Accessibility Guidelines
-
-### Color Contrast
-- High contrast between text and backgrounds
-- Sufficient color differentiation for status indicators
-- Alternative indicators beyond color alone
-
-### Interactive Elements
-- Minimum 44px touch targets
-- Clear focus indicators
-- Proper semantic markup
-
-## Icon System (from Iconography.svg analysis)
-
-### Style Specifications
-- **Primary Color**: `#130F26` - Dark navy for standard icons
-- **Secondary Color**: `#200E32` - Darker variant for emphasis
-- **Line Weight**: Clean, minimal stroke design
-- **Corner Style**: Rounded line caps and joins
-- **Consistent Grid**: All icons aligned to 24px grid system
-
-### Icon Categories
-Based on comprehensive iconography analysis:
-- **Navigation Icons**: Arrows (left, right, up, down, circular)
-- **Action Icons**: Play, export, import, close, expand
-- **UI Icons**: Chevrons, carets, interface controls
-- **Directional Icons**: Comprehensive set of directional indicators
-
-### Size Variants
-- **Small**: 16px for inline text icons
-- **Medium**: 20px for standard UI icons  
-- **Large**: 24px for prominent interface elements
-- **Extra Large**: 32px for feature icons and headers
-
-### Color Usage
-- **Dark Backgrounds**: White icons for maximum contrast
-- **Light Backgrounds**: `#130F26` (Dark navy) for clarity
-- **Interactive States**: Blue tints matching button colors
-- **Disabled States**: `#B3B1BB` (Light gray) for inactive icons
-
-### Usage Guidelines
-- Consistent icon placement (left of text in navigation)
-- 8px standard spacing between icons and text
-- Semantic meaning maintained across the application
-- Proper alignment within button and menu components
-
-## Cards and Containers
-
-### Elevation
-- **Level 1**: Subtle shadow for basic cards
-- **Level 2**: Medium shadow for modals and dropdowns
-- **Level 3**: Strong shadow for floating elements
-
-### Borders
-- **Radius**: 8px standard, 10px for prominent elements
-- **Color**: Light gray (`#E5E7EB`) for subtle borders
-- **Width**: 1px standard
-
-## Data Visualization
-
-### Progress Indicators
-- Circular and linear progress bars
-- Brand color gradients
-- Clear percentage or status labels
-
-### Status Badges
-- Consistent sizing and shape
-- Color-coded by meaning
-- Readable typography
-
-## Implementation Notes
-
-### CSS Variables Recommended
+Primary Brand Colors
 ```css
-/* Brand Colors */
---primary-purple: #110D59;
---secondary-purple: #28246F;
---accent-blue: #A3D1FC;
-
-/* Extended Purple Scale */
---purple-900: #110D59;
---purple-700: #28246F;
---purple-600: #44408A;
---purple-400: #7E7BB3;
---purple-300: #B4B1E6;
---purple-100: #DAD9F5;
-
-/* Button Colors */
---button-primary: #0B5FAE;
---button-secondary: #0E77D9;
---button-tertiary: #08437A;
---button-disabled: #E3E4E8;
---button-disabled-text: #D3D4DA;
-
-/* Typography Colors */
---text-primary: #222127;
---text-secondary: #55555F;
---text-placeholder: #B3B1BB;
-
-/* Grayscale Tokens */
---gray-darkest: #2B283D;
---gray-dark: #4C4958;
---gray-medium: #55555F;
---gray-light: #7D7A89;
---gray-lightest: #D9D9D9;
-
-/* Form Elements */
---input-background: #F8F9FD;
---input-border-radius: 7.5px;
---input-height: 48px;
-
-/* Icon Colors */
---icon-primary: #130F26;
---icon-secondary: #200E32;
-
-/* Layout */
---background-light: #F1F2F4;
---border-radius: 8px;
---spacing-unit: 16px;
---button-height: 51px;
---icon-spacing: 8px;
+--gemeos-dark-primary: #030213     /* Deep space blue - primary brand */
+--gemeos-dark-secondary: #14112e   /* Secondary dark */
+--gemeos-medium-primary: #1e1b4b   /* Medium blue */
+--gemeos-medium-secondary: #312e81 /* Medium purple */
+--gemeos-light-center: #4c46a0     /* Light purple center */
+--gemeos-accent-cyan: #06b6d4      /* Turquoise accent */
+--gemeos-accent-purple: #8b5cf6    /* Purple accent */
+--gemeos-accent-pink: #ec4899      /* Pink accent */
 ```
 
-### Component Consistency
-- Maintain consistent spacing using the 16px base unit
-- Use established color palette throughout
-- Follow the established typography hierarchy
-- Implement consistent hover and focus states
+Semantic Colors
+```css
+/* Status Indicators */
+--status-online: #10b981     /* Green - online */
+--status-away: #f59e0b       /* Yellow - away */
+--status-offline: #6b7280    /* Gray - offline */
 
-## Quality Assurance
+/* Feedback Colors */
+--success: #10b981           /* Green */
+--warning: #f59e0b           /* Amber */
+--error: #ef4444             /* Red */
+--info: #3b82f6              /* Blue */
+```
 
-### Design Review Checklist
-- [ ] Colors match the established palette
-- [ ] Spacing follows the 16px grid system
-- [ ] Typography hierarchy is maintained
-- [ ] Interactive states are consistent
-- [ ] Accessibility guidelines are followed
-- [ ] Component patterns are reused appropriately
+Gradient System
+```css
+/* Primary Button Gradient */
+background: linear-gradient(to right, #06b6d4, #8b5cf6)
+hover: linear-gradient(to right, #0891b2, #7c3aed)
 
-This style guide should be referenced for all UI development to ensure consistency across the Gemeos platform.
+/* Avatar Gradients */
+primary: linear-gradient(to right, #06b6d4, #8b5cf6)
+secondary: linear-gradient(to right, #8b5cf6, #ec4899)
+
+/* Sidebar Background */
+background: linear-gradient(180deg, #030213 0%, #1e1b4b 50%, #312e81 100%)
+```
+
+📝 Typography System
+
+Font Weights
+`font-normal` (400) - Body text, descriptions
+`font-medium` (500) - Labels, secondary headings
+`font-semibold` (600) - Card titles, section headers
+`font-bold` (700) - KPI numbers, primary data
+
+Font Sizes & Usage
+```css
+text-xs     /* 12px - Timestamps, meta info, badges */
+text-sm     /* 14px - Secondary text, table content */
+text-base   /* 16px - Primary body text, form inputs */
+text-lg     /* 18px - Card titles, section headers */
+text-xl     /* 20px - Page titles */
+text-2xl    /* 24px - Dashboard main title, KPI numbers */
+```
+
+Text Colors
+```css
+text-gray-900    /* Primary text - #111827 */
+text-gray-700    /* Secondary text - #374151 */
+text-gray-600    /* Tertiary text - #4b5563 */
+text-gray-500    /* Meta text - #6b7280 */
+text-white       /* White text on dark backgrounds */
+text-white/60    /* Muted white text - 60% opacity */
+text-white/70    /* Semi-muted white text - 70% opacity */
+```
+
+🧩 Component Patterns
+
+Cards
+```tsx
+// Standard Card
+<Card className="bg-white rounded-lg border border-gray-200 shadow-sm">
+  <CardHeader className="p-6">
+    <h3 className="text-lg font-semibold text-gray-900">Title</h3>
+    <p className="text-gray-600 text-sm">Description</p>
+  </CardHeader>
+  <CardContent className="p-6 pt-0">
+    {/* Content */}
+  </CardContent>
+</Card>
+
+// KPI Card
+<Card>
+  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+    <div className="text-sm font-medium text-gray-700">Label</div>
+    <Icon className="h-4 w-4 text-[color]" />
+  </CardHeader>
+  <CardContent>
+    <div className="text-2xl font-bold text-gray-900">Value</div>
+    <p className="text-xs text-[color] flex items-center mt-1">
+      <TrendingUpIcon className="w-3 h-3 mr-1" />
+      Change indicator
+    </p>
+  </CardContent>
+</Card>
+```
+
+Buttons
+```tsx
+// Primary Button
+<Button className="bg-gradient-to-r from-[#06b6d4] to-[#8b5cf6] text-white hover:from-[#0891b2] hover:to-[#7c3aed] px-4 py-2 rounded-md font-medium transition-all duration-200">
+  <Icon className="w-4 h-4 mr-2" />
+  Button Text
+</Button>
+
+// Secondary Button
+<Button variant="outline" className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-md font-medium transition-all duration-200">
+  <Icon className="w-4 h-4 mr-2" />
+  Button Text
+</Button>
+```
+
+Tables
+```tsx
+<table className="w-full">
+  <thead>
+    <tr className="border-b border-gray-200">
+      <th className="text-left py-3 px-4 font-medium text-gray-900">Header</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+      <td className="py-3 px-4">Content</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+Badges
+```tsx
+// Domain Badge
+<Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+  Domain
+</Badge>
+
+// Status Badge
+<Badge className="bg-gradient-to-r from-[#06b6d4] to-[#8b5cf6] text-white px-2 py-1 rounded-full text-xs font-medium">
+  <Icon className="w-3 h-3 mr-1" />
+  Premium
+</Badge>
+```
+
+Avatars
+```tsx
+// Standard Avatar
+<Avatar className="h-8 w-8 bg-gradient-to-r from-[#06b6d4] to-[#8b5cf6] text-white text-xs rounded-full flex items-center justify-center font-medium">
+  {initials}
+</Avatar>
+
+// Large Avatar
+<Avatar className="h-10 w-10 bg-gradient-to-r from-[#8b5cf6] to-[#ec4899] text-white text-sm rounded-full flex items-center justify-center font-medium">
+  {initials}
+</Avatar>
+```
+
+🎯 Status Indicators
+
+Online Status Dots
+```tsx
+// Online
+<div className="w-2 h-2 rounded-full bg-green-400" />
+
+// Away
+<div className="w-2 h-2 rounded-full bg-yellow-400" />
+
+// Offline
+<div className="w-2 h-2 rounded-full bg-gray-400" />
+```
+
+Notification Indicators
+```tsx
+// Active Notification
+<div className="relative">
+  <BellIcon className="w-5 h-5 text-amber-500" />
+  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full flex items-center justify-center">
+    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+  </div>
+</div>
+
+// Inactive Notification
+<BellIcon className="w-5 h-5 text-gray-300" />
+```
+
+📐 Spacing & Layout
+
+Grid Systems
+```tsx
+// KPI Cards (4 columns)
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+// Main Layout (3 columns)
+<div className="grid lg:grid-cols-3 gap-6">
+
+// Content Areas
+<div className="space-y-6">  /* Vertical spacing between sections */
+<div className="space-y-4">  /* Vertical spacing between items */
+<div className="space-y-3">  /* Tight vertical spacing */
+```
+
+Padding Standards
+```css
+p-2    /* 8px - Tight padding */
+p-3    /* 12px - Menu items, small buttons */
+p-4    /* 16px - Standard padding */
+p-6    /* 24px - Card headers/content */
+px-4   /* Horizontal: 16px - Buttons */
+py-2   /* Vertical: 8px - Buttons */
+py-3   /* Vertical: 12px - Table cells */
+```
+
+Margins & Gaps
+```css
+gap-1    /* 4px - Badge spacing */
+gap-3    /* 12px - Icon-text spacing */
+gap-4    /* 16px - Form elements */
+gap-6    /* 24px - Card grids */
+mb-2     /* 8px - Small bottom margin */
+mt-1     /* 4px - Tiny top margin */
+mr-2     /* 8px - Icon right margin */
+```
+
+🎨 Sidebar Design System
+
+Sidebar Background
+```css
+background: linear-gradient(180deg, #030213 0%, #1e1b4b 50%, #312e81 100%)
+```
+
+Navigation States
+```tsx
+// Active Navigation Item
+className={`w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200 bg-white/15 text-white font-medium`}
+
+// Inactive Navigation Item
+className={`w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200 text-white/70 hover:text-white hover:bg-white/10`}
+
+// Sub-menu Active
+className={`w-full text-left p-2 rounded-md transition-all duration-200 bg-white/12 text-white font-medium`}
+
+// Sub-menu Inactive
+className={`w-full text-left p-2 rounded-md transition-all duration-200 text-white/60 hover:text-white hover:bg-white/8`}
+```
+
+🔄 Interactive States
+
+Hover Effects
+```css
+/* Table Rows */
+hover:bg-gray-50 transition-colors
+
+/* Buttons */
+hover:from-[#0891b2] hover:to-[#7c3aed] transition-all duration-200
+
+/* Navigation */
+hover:text-white hover:bg-white/10 transition-all duration-200
+```
+
+Transitions
+```css
+transition-all duration-200    /* Standard transition */
+transition-colors             /* Color-only transition */
+transition-transform          /* Transform-only transition */
+```
+
+🎯 Icon System
+
+Icon Sizes
+```tsx
+className="w-3 h-3"    /* 12px - Tiny icons in text */
+className="w-4 h-4"    /* 16px - Standard icons */
+className="w-5 h-5"    /* 20px - Navigation icons */
+className="w-8 h-8"    /* 32px - Small avatars */
+className="w-10 h-10"  /* 40px - Medium avatars */
+className="w-12 h-12"  /* 48px - Large placeholders */
+```
+
+Icon Colors by Context
+```tsx
+// KPI Card Icons
+className="h-4 w-4 text-blue-600"    /* Teachers */
+className="h-4 w-4 text-purple-600"  /* Students */
+className="h-4 w-4 text-pink-600"    /* Classes */
+className="h-4 w-4 text-amber-600"   /* Messages */
+
+// Table Icons
+className="w-4 h-4 text-gray-400"    /* Data context icons */
+
+// Notification Icons
+className="w-5 h-5 text-amber-500"   /* Active notifications */
+className="w-5 h-5 text-gray-300"    /* Inactive notifications */
+```
+
+📊 Data Visualization
+
+Progress Bars
+```tsx
+<div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+  <div className="bg-gradient-to-r from-[#06b6d4] to-[#8b5cf6] h-2 rounded-full" style={{ width: '87%' }} />
+</div>
+```
+
+KPI Growth Indicators
+```tsx
+<p className="text-xs text-green-600 flex items-center mt-1">
+  <TrendingUpIcon className="w-3 h-3 mr-1" />
+  +2 from last month
+</p>
+```
+
+🔧 Implementation Guidelines
+
+Component Import Pattern
+```tsx
+import { Button } from "./components/ui/button";
+import { Card, CardHeader, CardContent } from "./components/ui/card";
+import { Badge } from "./components/ui/badge";
+import { Avatar } from "./components/ui/avatar";
+```
+
+Responsive Design
+```tsx
+// Mobile-first approach
+className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+className="flex flex-col lg:flex-row"
+className="space-y-4 lg:space-y-0 lg:space-x-4"
+```
+
+Accessibility Patterns
+```tsx
+// Proper semantic HTML
+<table>
+<thead>
+<th scope="col">
+
+// Screen reader friendly
+aria-label="Add new teacher"
+alt="Teacher avatar"
+
+// Keyboard navigation
+tabIndex={0}
+```

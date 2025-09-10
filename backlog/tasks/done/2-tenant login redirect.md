@@ -1,0 +1,1 @@
+Right after password set or password reset or login, a user with role = tenant is redirected to the /tenant/dashboard page

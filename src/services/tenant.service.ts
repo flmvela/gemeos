@@ -14,7 +14,7 @@ export interface CreateTenantData {
   max_users?: number;
   max_domains?: number;
   status?: TenantStatus;
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
 }
 
 export interface UpdateTenantData {
@@ -24,7 +24,7 @@ export interface UpdateTenantData {
   max_users?: number;
   max_domains?: number;
   status?: TenantStatus;
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
 }
 
 export interface TenantFilters {
@@ -76,6 +76,115 @@ class TenantService {
     }
 
     return tenant as Tenant;
+  }
+
+  /**
+   * Get tenant by ID with complete data for editing
+   */
+  async getTenantById(tenantId: string): Promise<{
+    basic: Tenant;
+    domains: Array<{ id: string; name: string; slug: string; assigned: boolean; settings?: Record<string, unknown> }>;
+    admins: Array<{ id: string; email: string; role: string; status: string; created_at: string }>;
+    limits: { global_max_teachers: number; global_max_students: number; enforce_limits: boolean };
+    settings: Record<string, unknown>;
+  } | null> {
+    console.log('🔍 [TENANT-SERVICE] Loading complete tenant data for:', tenantId);
+
+    try {
+      // Load basic tenant info
+      const { data: tenant, error: tenantError } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('id', tenantId)
+        .single();
+
+      if (tenantError) {
+        console.error('❌ [TENANT-SERVICE] Error loading tenant:', tenantError);
+        return null;
+      }
+
+      if (!tenant) {
+        console.error('❌ [TENANT-SERVICE] Tenant not found:', tenantId);
+        return null;
+      }
+
+      // Load all available domains
+      const { data: allDomains, error: domainsError } = await supabase
+        .from('domains')
+        .select('id, name, slug')
+        .order('name');
+
+      const { data: tenantDomains, error: tenantDomainsError } = await supabase
+        .from('tenant_domains')
+        .select('domain_id, settings')
+        .eq('tenant_id', tenantId);
+
+      if (domainsError) {
+        console.error('❌ [TENANT-SERVICE] Error loading domains:', domainsError);
+      }
+
+      const tenantDomainMap = new Map(
+        (tenantDomains || []).map(td => [td.domain_id, td])
+      );
+
+      const domains = (allDomains || []).map(domain => ({
+        id: domain.id,
+        name: domain.name,
+        slug: domain.slug,
+        assigned: tenantDomainMap.has(domain.id),
+        settings: tenantDomainMap.get(domain.id)?.settings || {}
+      }));
+
+      // Load tenant admins - simplified for now, we'll enhance this later
+      const { data: admins, error: adminsError } = await supabase
+        .from('user_tenants')
+        .select(`
+          id,
+          user_id,
+          status,
+          created_at
+        `)
+        .eq('tenant_id', tenantId);
+
+      if (adminsError) {
+        console.error('❌ [TENANT-SERVICE] Error loading admins:', adminsError);
+      }
+
+      const adminList = (admins || []).map(admin => ({
+        id: admin.id,
+        email: `user-${admin.user_id.substring(0, 8)}@tenant.com`, // Placeholder for now
+        role: 'tenant_admin',
+        status: admin.status,
+        created_at: admin.created_at
+      }));
+
+      // Extract limits from tenant settings or use defaults
+      const limits = {
+        global_max_teachers: tenant.max_users || 50,
+        global_max_students: tenant.max_users ? tenant.max_users * 10 : 500,
+        enforce_limits: true
+      };
+
+      const result = {
+        basic: tenant,
+        domains,
+        admins: adminList,
+        limits,
+        settings: tenant.settings || {}
+      };
+
+      console.log('✅ [TENANT-SERVICE] Loaded complete tenant data:', {
+        tenantId,
+        domainsCount: domains.length,
+        assignedDomains: domains.filter(d => d.assigned).length,
+        adminsCount: adminList.length
+      });
+
+      return result;
+    } catch (error) {
+      console.error('❌ [TENANT-SERVICE] Error loading tenant data:', error);
+      return null;
+    }
   }
 
   /**

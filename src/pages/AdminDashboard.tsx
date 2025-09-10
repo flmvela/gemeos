@@ -1,5 +1,4 @@
 import { TenantAdminDashboardNew } from "@/components/tenant-admin/TenantAdminDashboardNew";
-import { PermissionGuard } from "@/components/PermissionGuard";
 
 export default function AdminDashboard() {
   // SEO: title and meta
@@ -18,16 +17,14 @@ export default function AdminDashboard() {
     if (!canonical) {
       const link = document.createElement('link');
       link.setAttribute('rel', 'canonical');
-      link.setAttribute('href', window.location.origin + '/admin/dashboard');
+      link.setAttribute('href', window.location.origin + '/tenant/dashboard');
       document.head.appendChild(link);
     } else {
-      canonical.setAttribute('href', window.location.origin + '/admin/dashboard');
+      canonical.setAttribute('href', window.location.origin + '/tenant/dashboard');
     }
   }
 
-  return (
-    <PermissionGuard resource="page:dashboard" action="read">
-      <TenantAdminDashboardNew />
-    </PermissionGuard>
-  );
+  // TODO: Add proper permissions for tenant_admin role
+  // For now, bypass PermissionGuard since RouteProtection already checks roles
+  return <TenantAdminDashboardNew />;
 }

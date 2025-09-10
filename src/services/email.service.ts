@@ -112,7 +112,7 @@ export class EmailService {
   /**
    * Queue an email for processing for a specific tenant (used during tenant creation)
    */
-  async queueEmailForTenant(tenantId: string, request: QueueEmailRequest): Promise<string | null> {
+  async queueEmailForTenant(tenantId: string, request: QueueEmailRequest): Promise<{ success: boolean; queueId?: string | null; error?: string }> {
     try {
       console.log('🔍 [QA-EMAIL] Starting queueEmailForTenant with request:', {
         tenantId,
@@ -146,7 +146,7 @@ export class EmailService {
       }
 
       console.log('✅ [QA-EMAIL] Email queued successfully for tenant, queue ID:', data);
-      return data;
+      return { success: true, queueId: data };
     } catch (error: any) {
       console.error('❌ [QA-EMAIL] Error in queueEmailForTenant:', {
         error,
@@ -155,7 +155,7 @@ export class EmailService {
         errorDetails: error?.details,
         tenantId
       });
-      throw error;
+      return { success: false, error: error?.message || 'Failed to queue email' };
     }
   }
 

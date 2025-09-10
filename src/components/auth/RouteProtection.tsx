@@ -10,6 +10,17 @@ interface RouteProtectionProps {
 export const RouteProtection = ({ children }: RouteProtectionProps) => {
   const location = useLocation();
   const { session, authState, isPlatformAdmin, isTenantAdmin, isTeacher, enrichmentLoading } = useAuth();
+  
+  // Debug logging
+  console.log('🔐 RouteProtection Debug:', {
+    path: location.pathname,
+    authState,
+    enrichmentLoading,
+    isPlatformAdmin,
+    isTenantAdmin,
+    isTeacher,
+    email: session?.email
+  });
 
   // Check auth state first
   if (authState === 'authenticating') {
@@ -46,11 +57,14 @@ export const RouteProtection = ({ children }: RouteProtectionProps) => {
     if (enrichmentLoading) {
       console.log('🔐 RouteProtection: Admin dashboard - waiting for enrichment');
       return (
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="space-y-4 w-full max-w-md">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
+        <div className="flex items-center justify-center min-h-screen bg-gray-50">
+          <div className="space-y-4 w-full max-w-md p-6">
+            <div className="text-center mb-4">
+              <p className="text-gray-600">Loading admin dashboard...</p>
+            </div>
+            <Skeleton className="h-8 w-full bg-gray-200" />
+            <Skeleton className="h-4 w-3/4 bg-gray-200" />
+            <Skeleton className="h-4 w-1/2 bg-gray-200" />
           </div>
         </div>
       );

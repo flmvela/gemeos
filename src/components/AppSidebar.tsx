@@ -177,7 +177,8 @@ const FlyoutPanel = ({
   isVisible, 
   onMouseEnter, 
   onMouseLeave,
-  isValidPage 
+  isValidPage,
+  skipFilter = false
 }: {
   items: FlyoutItem[]
   title: string
@@ -185,7 +186,8 @@ const FlyoutPanel = ({
   isVisible: boolean
   onMouseEnter: () => void
   onMouseLeave: () => void
-  isValidPage: (url: string) => boolean
+  isValidPage?: (url: string) => boolean
+  skipFilter?: boolean
 }) => {
   if (!isVisible) return null
 
@@ -204,7 +206,7 @@ const FlyoutPanel = ({
       {/* Flyout Items */}
       <div className="py-2">
         {items
-          .filter(item => isValidPage(item.url))
+          .filter(item => skipFilter || !isValidPage || isValidPage(item.url))
           .map((item) => (
             <NavLink
               key={item.title}
@@ -257,6 +259,10 @@ export function AppSidebar() {
     currentPath.startsWith('/admin/settings') ||
     currentPath.startsWith('/admin/upload')
   )
+  // Get auth info first
+  const { data: accessiblePaths = [] } = useUserAccessiblePaths()
+  const { isPlatformAdmin, isTenantAdmin, isTeacher } = useAuth()
+  
   const [isAuthPagesExpanded, setIsAuthPagesExpanded] = useState(false)
   const [isDevelopmentExpanded, setIsDevelopmentExpanded] = useState(false)
   const [isTeacherAreaExpanded, setIsTeacherAreaExpanded] = useState(
@@ -265,10 +271,7 @@ export function AppSidebar() {
   
   // Flyout state management for collapsed sidebar
   const [activeFlyout, setActiveFlyout] = useState<string | null>(null)
-  const flyoutTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({})
-  
-  const { data: accessiblePaths = [] } = useUserAccessiblePaths()
-  const { isPlatformAdmin, isTenantAdmin, isTeacher } = useAuth()
+  const flyoutTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({});
   
   // Check if user is platform admin
   const isAdmin = isPlatformAdmin
@@ -487,7 +490,6 @@ export function AppSidebar() {
                     {state !== 'collapsed' && isAdminManagementExpanded && (
                       <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
                         {tenantAdminItems
-                          .filter(item => isValidPage(item.url))
                           .map((item) => (
                             <SidebarMenuSubItem key={item.title}>
                               <SidebarMenuSubButton asChild>
@@ -518,7 +520,7 @@ export function AppSidebar() {
                       isVisible={state === 'collapsed' && activeFlyout === 'tenant-management'}
                       onMouseEnter={() => handleFlyoutMouseEnter('tenant-management')}
                       onMouseLeave={() => handleFlyoutMouseLeave('tenant-management')}
-                      isValidPage={isValidPage}
+                      skipFilter={true}
                     />
                   </div>
                 </SidebarMenuItem>
@@ -589,7 +591,6 @@ export function AppSidebar() {
                     {state !== 'collapsed' && isTeacherAreaExpanded && (
                       <SidebarMenuSub className="ml-0 mt-2 space-y-1 border-l-0">
                         {teacherAreaItems
-                          .filter(item => isValidPage(item.url))
                           .map((item) => (
                             <SidebarMenuSubItem key={item.title}>
                               <SidebarMenuSubButton asChild>
@@ -620,7 +621,7 @@ export function AppSidebar() {
                       isVisible={state === 'collapsed' && activeFlyout === 'teacher-area'}
                       onMouseEnter={() => handleFlyoutMouseEnter('teacher-area')}
                       onMouseLeave={() => handleFlyoutMouseLeave('teacher-area')}
-                      isValidPage={isValidPage}
+                      skipFilter={true}
                     />
                   </div>
                 </SidebarMenuItem>

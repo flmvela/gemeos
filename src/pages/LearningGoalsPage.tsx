@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DynamicBreadcrumb } from '@/components/navigation/DynamicBreadcrumb';
 import { useDomains } from '@/hooks/useDomains';
+import { useDomainSlug } from '@/hooks/useDomainSlug';
 import { useLearningGoals, type LearningGoal } from '@/hooks/useLearningGoals';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -522,19 +523,27 @@ function GoalsList({ goals, onStatusChange, onEdit }: GoalsListProps) {
 }
 
 export default function LearningGoalsPage() {
-  const { domainId } = useParams<{ domainId: string }>();
+  const { domainId, slug } = useParams<{ domainId?: string; slug?: string }>();
   const [searchParams] = useSearchParams();
   const conceptIdFromUrl = searchParams.get('conceptId');
   
   const { domains } = useDomains();
+  
+  // Use slug resolution if we have a slug parameter, otherwise fallback to old domainId logic
+  const identifier = slug || domainId || '';
+  const { domain: resolvedDomain, loading: domainLoading, error: domainError } = useDomainSlug(identifier);
+  
+  // Find domain - use resolved domain if available, otherwise fallback to legacy logic
   const domain = useMemo(() => {
+    if (resolvedDomain) {
+      return resolvedDomain;
+    }
     if (domainId) {
       return domains.find(d => d.id === domainId || (d as any).slug === domainId);
     }
     // For teacher routes without domainId, try to get domain from the first available domain
-    // or we could add domain selection UI
     return domains[0];
-  }, [domains, domainId]);
+  }, [resolvedDomain, domains, domainId]);
   
   const [selectedConcept, setSelectedConcept] = useState<string | null>(conceptIdFromUrl);
   const [concepts, setConcepts] = useState<Concept[]>([]);

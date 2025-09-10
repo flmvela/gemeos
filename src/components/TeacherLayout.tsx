@@ -13,27 +13,18 @@ export function TeacherLayout({ children }: TeacherLayoutProps) {
   const navigate = useNavigate();
 
   const handleGemeosClick = () => {
-    navigate('/admin/dashboard');
+    navigate('/tenant/dashboard');
   };
 
   return (
     <BreadcrumbProvider>
       <SidebarProvider defaultOpen={true}>
-        <div className="min-h-screen flex w-full">
+        <div className="min-h-screen flex w-full bg-gray-50">
           <AppSidebar />
           
           <div className="flex-1 flex flex-col">
-            {/* Header with hamburger menu */}
-            <header className="h-14 border-b bg-background flex items-center px-4">
-              <SidebarTrigger />
-              <div className="ml-4 flex-1">
-                <h1 
-                  className="text-lg font-semibold cursor-pointer hover:text-primary transition-colors"
-                  onClick={handleGemeosClick}
-                >
-                  Gemeos
-                </h1>
-              </div>
+            {/* Header with user dropdown only */}
+            <header className="h-14 border-b bg-background flex items-center justify-end px-4">
               <UserDropdown />
             </header>
 

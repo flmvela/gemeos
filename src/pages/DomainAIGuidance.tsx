@@ -8,6 +8,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useDomains } from '@/hooks/useDomains';
+import { useDomainSlug } from '@/hooks/useDomainSlug';
 import { useGuidanceStatus } from '@/hooks/useGuidanceStatus';
 import { DynamicBreadcrumb } from '@/components/navigation/DynamicBreadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,14 +16,20 @@ import { useToast } from '@/hooks/use-toast';
 import { getGuidanceIcon, getGuidanceDescription } from '@/lib/guidanceUtils';
 
 const DomainAIGuidance = () => {
-  const { domainId } = useParams<{ domainId: string }>();
+  const { domainId, slug } = useParams<{ domainId?: string; slug?: string }>();
   const navigate = useNavigate();
   const { domains, loading: domainsLoading } = useDomains();
-  const domain = domains.find(d => d.id === domainId);
-  const { guidanceStatus, loading: guidanceLoading, error, refetch } = useGuidanceStatus(domainId || '', domain?.name);
+  
+  // Use slug resolution if we have a slug parameter, otherwise fallback to old domainId logic
+  const identifier = slug || domainId || '';
+  const { domain: resolvedDomain, loading: domainLoading } = useDomainSlug(identifier);
+  
+  // Find domain - use resolved domain if available, otherwise fallback to legacy logic
+  const domain = resolvedDomain || domains.find(d => d.id === domainId);
+  const { guidanceStatus, loading: guidanceLoading, error, refetch } = useGuidanceStatus(domain?.id || '', domain?.name);
   const { toast } = useToast();
 
-  const loading = domainsLoading || guidanceLoading;
+  const loading = domainsLoading || guidanceLoading || domainLoading;
 
   // Create guidance areas from dynamic GCS data
   const guidanceAreas = guidanceStatus?.areas.map(area => ({
@@ -33,7 +40,11 @@ const DomainAIGuidance = () => {
   })) || [];
 
   const handleOpenGuidance = (areaKey: string) => {
-    navigate(`/admin/domain/${domainId}/ai-guidance/${areaKey}`);
+    if (slug) {
+      navigate(`/admin/domains/${slug}/ai-guidance/${areaKey}`);
+    } else {
+      navigate(`/admin/domain/${domainId}/ai-guidance/${areaKey}`);
+    }
   };
 
   const handleViewFile = (areaKey: string) => {

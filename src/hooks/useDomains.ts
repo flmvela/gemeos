@@ -11,7 +11,7 @@ export interface Domain {
   updated_at: string;
 }
 
-export const useDomains = () => {
+export const useDomains = (tenantId?: string) => {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -19,13 +19,34 @@ export const useDomains = () => {
   const fetchDomains = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('domains')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setDomains(data || []);
+      
+      if (tenantId) {
+        // Tenant-specific domains from tenant_domains
+        const { data, error } = await supabase
+          .from('domains')
+          .select(`
+            *,
+            tenant_domains!inner(
+              tenant_id,
+              is_active
+            )
+          `)
+          .eq('tenant_domains.tenant_id', tenantId)
+          .eq('tenant_domains.is_active', true)
+          .order('name');
+        
+        if (error) throw error;
+        setDomains(data || []);
+      } else {
+        // Platform admin - all domains
+        const { data, error } = await supabase
+          .from('domains')
+          .select('*')
+          .order('name');
+        
+        if (error) throw error;
+        setDomains(data || []);
+      }
     } catch (error) {
       console.error('Error fetching domains:', error);
       toast({
@@ -122,7 +143,7 @@ export const useDomains = () => {
 
   useEffect(() => {
     fetchDomains();
-  }, []);
+  }, [tenantId]);
 
   return {
     domains,

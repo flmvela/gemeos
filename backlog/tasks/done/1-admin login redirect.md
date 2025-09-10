@@ -1,0 +1,1 @@
+After successul login, the admin must be redirected to /admin/dashboard

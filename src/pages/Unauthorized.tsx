@@ -2,9 +2,17 @@ import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { getDashboardUrlForUser } from '@/utils/auth-redirects';
 
 export default function Unauthorized() {
   const navigate = useNavigate();
+  const { session } = useAuth();
+
+  const handleDashboardClick = () => {
+    const dashboardUrl = getDashboardUrlForUser(session);
+    navigate(dashboardUrl);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -30,9 +38,9 @@ export default function Unauthorized() {
               Go Back
             </Button>
             <Button 
-              onClick={() => navigate('/teacher/dashboard')}
+              onClick={handleDashboardClick}
             >
-              Dashboard
+              My Dashboard
             </Button>
           </div>
         </CardContent>

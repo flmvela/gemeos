@@ -1,0 +1,1 @@
+make a list of suggested content (concepts, learning goals, exercises) with the reference to the uploaded content to improve the approval / reject process

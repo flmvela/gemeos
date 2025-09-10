@@ -3,7 +3,7 @@
  * Based on Harmony Music Academy design with modern glass morphism cards
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Users, 
@@ -29,6 +29,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/hooks/useAuth';
+import { teacherService, type Teacher as DbTeacher } from '@/services/teacher.service';
+import { useToast } from '@/hooks/use-toast';
 
 interface Teacher {
   id: string;
@@ -53,16 +56,69 @@ interface ClassData {
 export function TenantAdminDashboardNew() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
+  const { session, tenantContext } = useAuth();
   const [viewMode, setViewMode] = useState<'list' | 'statistics'>('list');
   const [searchTerm, setSearchTerm] = useState('');
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [isLoadingTeachers, setIsLoadingTeachers] = useState(true);
   
   // Check which dashboard we're on
   const isTeacherDashboard = location.pathname === '/teacher/dashboard';
   const isTenantDashboard = location.pathname === '/tenant/dashboard';
   
-  // Mock data based on the dashboard image
+  // Fetch real teachers from database
+  useEffect(() => {
+    const fetchTeachers = async () => {
+      const tenantId = session?.current_tenant?.tenant_id || tenantContext?.tenant?.id;
+      
+      if (!tenantId) {
+        console.log('No tenant ID available to fetch teachers');
+        setIsLoadingTeachers(false);
+        return;
+      }
+      
+      try {
+        setIsLoadingTeachers(true);
+        const dbTeachers = await teacherService.getTeachersByTenant(tenantId);
+        
+        // Transform database teachers to display format
+        const transformedTeachers: Teacher[] = dbTeachers.map((teacher, index) => {
+          const initials = `${teacher.first_name[0]}${teacher.last_name[0]}`.toUpperCase();
+          const colors = ['primary', 'secondary', 'tertiary'] as const;
+          
+          return {
+            id: teacher.id,
+            name: `${teacher.first_name} ${teacher.last_name}`,
+            initials,
+            status: teacher.status === 'active' ? 'online' : teacher.status === 'on_leave' ? 'away' : 'offline',
+            domains: [], // Will be populated when we fetch teacher domains
+            classes: 0, // Will be populated when we have classes data
+            students: 0, // Will be populated when we have student data
+            notifications: 0,
+            avatarColor: colors[index % colors.length]
+          };
+        });
+        
+        setTeachers(transformedTeachers);
+      } catch (error) {
+        console.error('Error fetching teachers:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load teachers. Please refresh the page.',
+          variant: 'destructive'
+        });
+      } finally {
+        setIsLoadingTeachers(false);
+      }
+    };
+    
+    fetchTeachers();
+  }, [session, tenantContext, toast]);
+  
+  // Dynamic KPI data based on actual teachers
   const kpiData = {
-    teachers: { value: 12, change: '+2 from last month', trend: 'up' },
+    teachers: { value: teachers.length, change: '+2 from last month', trend: 'up' },
     students: { value: 289, change: '+23 from last month', trend: 'up' },
     classes: { value: 28, change: '+5 this month', trend: 'up' },
     messages: { value: 7, label: 'Unread messages' }
@@ -75,64 +131,6 @@ export function TenantAdminDashboardNew() {
     goalsAchieved: { value: 47, change: '94% completion rate', trend: 'up' },
     activitiesThisWeek: { value: 132, change: '+23% from last week', trend: 'up' }
   };
-
-  const teachers: Teacher[] = [
-    {
-      id: '1',
-      name: 'Sarah Chen',
-      initials: 'SC',
-      status: 'online',
-      domains: ['Piano', 'Music Theory'],
-      classes: 3,
-      students: 24,
-      notifications: 1,
-      avatarColor: 'primary'
-    },
-    {
-      id: '2',
-      name: 'Marcus Rodriguez',
-      initials: 'MR',
-      status: 'online',
-      domains: ['Guitar', 'Composition'],
-      classes: 2,
-      students: 18,
-      notifications: 0,
-      avatarColor: 'secondary'
-    },
-    {
-      id: '3',
-      name: 'Emma Thompson',
-      initials: 'ET',
-      status: 'away',
-      domains: ['Violin', 'Orchestra'],
-      classes: 2,
-      students: 15,
-      notifications: 1,
-      avatarColor: 'tertiary'
-    },
-    {
-      id: '4',
-      name: 'David Kim',
-      initials: 'DK',
-      status: 'offline',
-      domains: ['Music Production', 'Audio Engineering'],
-      classes: 3,
-      students: 12,
-      notifications: 0,
-      avatarColor: 'primary'
-    },
-    {
-      id: '5',
-      name: 'Lisa Wang',
-      initials: 'LW',
-      status: 'online',
-      domains: ['Jazz Performance'],
-      classes: 1,
-      students: 8,
-      notifications: 1,
-      avatarColor: 'secondary'
-    }
-  ];
 
   // Classes data for teacher dashboard
   const classes: ClassData[] = [
@@ -487,59 +485,86 @@ export function TenantAdminDashboardNew() {
                     </tr>
                   </thead>
                   <tbody>
-                    {teachers.map((teacher) => (
-                      <tr key={teacher.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <Avatar className={`h-8 w-8 ${getAvatarGradient(teacher.avatarColor)} text-white text-xs rounded-full flex items-center justify-center font-medium`}>
-                                {teacher.initials}
-                              </Avatar>
-                              <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${getStatusDotColor(teacher.status)}`} />
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{teacher.name}</p>
-                              <p className="text-xs text-gray-500 capitalize">{teacher.status}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex gap-1 flex-wrap">
-                            {teacher.domains.map((domain, index) => (
-                              <Badge key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
-                                {domain}
-                              </Badge>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1">
-                            <BookOpen className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium text-gray-900">{teacher.classes}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1">
-                            <GraduationCap className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium text-gray-900">{teacher.students}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-center">
-                            {teacher.notifications > 0 ? (
-                              <div className="relative">
-                                <Bell className="w-5 h-5 text-amber-500" />
-                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full flex items-center justify-center">
-                                  <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                </div>
-                              </div>
-                            ) : (
-                              <Bell className="w-5 h-5 text-gray-300" />
-                            )}
+                    {isLoadingTeachers ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                            <p className="text-sm text-gray-500">Loading teachers...</p>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ) : teachers.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center">
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <Users className="w-12 h-12 text-gray-300" />
+                            <div>
+                              <p className="text-gray-900 font-medium">No teachers yet</p>
+                              <p className="text-sm text-gray-500 mt-1">Click "Add Teacher" to get started</p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      teachers.map((teacher) => (
+                        <tr key={teacher.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <Avatar className={`h-8 w-8 ${getAvatarGradient(teacher.avatarColor)} text-white text-xs rounded-full flex items-center justify-center font-medium`}>
+                                  {teacher.initials}
+                                </Avatar>
+                                <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${getStatusDotColor(teacher.status)}`} />
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">{teacher.name}</p>
+                                <p className="text-xs text-gray-500 capitalize">{teacher.status}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex gap-1 flex-wrap">
+                              {teacher.domains.length > 0 ? (
+                                teacher.domains.map((domain, index) => (
+                                  <Badge key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                                    {domain}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-500">No domains assigned</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1">
+                              <BookOpen className="w-4 h-4 text-gray-400" />
+                              <span className="font-medium text-gray-900">{teacher.classes}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1">
+                              <GraduationCap className="w-4 h-4 text-gray-400" />
+                              <span className="font-medium text-gray-900">{teacher.students}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center">
+                              {teacher.notifications > 0 ? (
+                                <div className="relative">
+                                  <Bell className="w-5 h-5 text-amber-500" />
+                                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full flex items-center justify-center">
+                                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Bell className="w-5 h-5 text-gray-300" />
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               )}

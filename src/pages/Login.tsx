@@ -16,19 +16,15 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { session, loading: authLoading } = useAuth();
+  const { session, authState } = useAuth();
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (!authLoading && session) {
+    if (authState === 'authenticated' && session) {
       const redirectUrl = getDashboardUrlForUser(session);
-      const timeout = setTimeout(() => {
-        navigate(redirectUrl, { replace: true });
-      }, 100); // Slightly longer delay for smoother UX
-
-      return () => clearTimeout(timeout);
+      navigate(redirectUrl, { replace: true });
     }
-  }, [authLoading, session, navigate]);
+  }, [authState, session, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,23 +43,23 @@ const Login = () => {
       }
 
       if (data.user && data.session) {
-        // Success! Navigate immediately based on the session
         console.log('Login successful:', data.user.email);
         
-        // Navigate immediately based on the session we got
+        // Navigate immediately with the session we have - single navigation point
         const redirectUrl = getDashboardUrlForUser(data.session);
         navigate(redirectUrl, { replace: true });
+        // Don't setIsLoading(false) here - let navigation happen
+        return;
       }
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err?.message || 'Invalid email or password. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
 
   // Show loading state while authenticated user is being redirected
-  if (!authLoading && session) {
+  if (authState === 'authenticated' && session) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
         <div className="text-center">
@@ -166,7 +162,7 @@ const Login = () => {
               <Button
                 type="submit"
                 className="w-full h-11 bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-700 hover:to-cyan-700 text-white font-medium border-0"
-                disabled={isLoading || authLoading}
+                disabled={isLoading || authState === 'authenticating'}
               >
                 {isLoading ? 'Signing in...' : 'Sign in'}
               </Button>

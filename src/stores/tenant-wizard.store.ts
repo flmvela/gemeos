@@ -83,6 +83,10 @@ interface TenantWizardState {
   closeWizard: () => void;
   resetWizard: () => void;
   
+  // Page-based modes (new)
+  initializeCreateMode: () => void;
+  initializeEditMode: (tenantId: string, existingData: Partial<WizardData>) => void;
+  
   // Validation
   validateStep: (step: WizardStep) => Promise<boolean>;
   setErrors: (errors: Record<string, string[]>) => void;
@@ -295,6 +299,31 @@ export const useTenantWizardStore = create<TenantWizardState>()(
             errors: {},
             editingTenantId: undefined
           }, false, 'resetWizard');
+        },
+
+        // Page-based modes (new)
+        initializeCreateMode: () => {
+          set({
+            isOpen: false, // Page mode doesn't use modal
+            mode: 'create',
+            editingTenantId: undefined,
+            currentStep: 'basic',
+            completedSteps: new Set(),
+            data: { ...initialData },
+            errors: {}
+          }, false, 'initializeCreateMode');
+        },
+
+        initializeEditMode: (tenantId, existingData) => {
+          set({
+            isOpen: false, // Page mode doesn't use modal
+            mode: 'edit',
+            editingTenantId: tenantId,
+            currentStep: 'basic',
+            completedSteps: new Set(['basic', 'domains', 'limits', 'admins', 'settings']),
+            data: { ...initialData, ...existingData },
+            errors: {}
+          }, false, 'initializeEditMode');
         },
 
         // Validation

@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth, useAuthGuard } from '@/hooks/useAuth';
 import { TenantAdminDashboard } from '@/components/tenant-admin/TenantAdminDashboard';
 import { TeacherManagement } from '@/components/tenant-admin/TeacherManagement';
+import { PermissionGuard } from '@/components/PermissionGuard';
 import { Loader2 } from 'lucide-react';
 
 /**
@@ -37,27 +38,29 @@ export function TenantAdminPage() {
   }
 
   return (
-    <div className="container mx-auto py-6">
-      <Routes>
-        {/* Dashboard Route */}
-        <Route index element={<TenantAdminDashboard />} />
-        
-        {/* Teacher Management Route */}
-        <Route path="teachers" element={<TeacherManagementPage />} />
-        
-        {/* Domain Management Route */}
-        <Route path="domains" element={<DomainManagementPage />} />
-        
-        {/* Settings Route */}
-        <Route path="settings" element={<TenantSettingsPage />} />
-        
-        {/* Invitations Route */}
-        <Route path="invitations" element={<InvitationsPage />} />
-        
-        {/* Catch all - redirect to dashboard */}
-        <Route path="*" element={<Navigate to="/admin" replace />} />
-      </Routes>
-    </div>
+    <PermissionGuard resource="page:tenant_admin" action="read">
+      <div className="container mx-auto py-6">
+        <Routes>
+          {/* Dashboard Route */}
+          <Route index element={<TenantAdminDashboard />} />
+          
+          {/* Teacher Management Route */}
+          <Route path="teachers" element={<TeacherManagementPage />} />
+          
+          {/* Domain Management Route */}
+          <Route path="domains" element={<DomainManagementPage />} />
+          
+          {/* Settings Route */}
+          <Route path="settings" element={<TenantSettingsPage />} />
+          
+          {/* Invitations Route */}
+          <Route path="invitations" element={<InvitationsPage />} />
+          
+          {/* Catch all - redirect to dashboard */}
+          <Route path="*" element={<Navigate to="/admin" replace />} />
+        </Routes>
+      </div>
+    </PermissionGuard>
   );
 }
 

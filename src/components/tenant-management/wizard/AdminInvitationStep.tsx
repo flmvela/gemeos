@@ -21,10 +21,11 @@ import {
   AlertCircle,
   Info
 } from 'lucide-react';
-import { useAdminsStep } from '@/stores/tenant-wizard.store';
+import { useAdminsStep, useTenantWizardStore } from '@/stores/tenant-wizard.store';
 
 export const AdminInvitationStep: React.FC = () => {
   const { data, update, errors } = useAdminsStep();
+  const { mode } = useTenantWizardStore();
   const [newEmail, setNewEmail] = useState('');
   const [emailError, setEmailError] = useState('');
 
@@ -103,15 +104,39 @@ export const AdminInvitationStep: React.FC = () => {
         </div>
       </div>
 
+      {/* Edit Mode Notice */}
+      {mode === 'edit' && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-medium text-blue-900 mb-1">
+                  Edit Mode: Existing Admins
+                </h4>
+                <p className="text-sm text-blue-700">
+                  The list below shows existing tenant administrators. When you save changes, 
+                  existing users will receive password reset emails instead of invitation emails. 
+                  New administrators added here will receive invitation emails.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Add New Invitation */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-primary" />
-            Add Administrator
+            {mode === 'edit' ? 'Add New Administrator' : 'Add Administrator'}
           </CardTitle>
           <CardDescription>
-            Send an invitation to a new tenant administrator
+            {mode === 'edit' 
+              ? 'Add a new administrator to this tenant (will receive invitation email)'
+              : 'Send an invitation to a new tenant administrator'
+            }
           </CardDescription>
         </CardHeader>
         <CardContent>

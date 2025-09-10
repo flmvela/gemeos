@@ -89,7 +89,18 @@
       "Bash(SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY node check_tenants.js)",
       "mcp__playwright__browser_network_requests",
       "Bash(SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY npx supabase functions deploy send-email --no-verify-jwt)",
-      "mcp__playwright__browser_evaluate"
+      "mcp__playwright__browser_evaluate",
+      "Bash(env)",
+      "Bash(kill:*)",
+      "Bash(SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY node create_admin_with_password.js)",
+      "Bash(for port in 3000 5173 5174 5175 5176)",
+      "Bash(npx playwright test:*)",
+      "Bash(npx tsx:*)",
+      "mcp__ide__executeCode",
+      "Bash(SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY node verify_user.js)",
+      "Bash(SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY node verify_user.cjs)",
+      "Bash(npx playwright install:*)",
+      "mcp__playwright__browser_tabs"
     ],
     "deny": [],
     "ask": []

@@ -4,8 +4,8 @@
  * Features "The Future of Learning is Personal" hero with motion animations
  */
 
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { getDashboardUrlForUser } from '@/utils/auth-redirects';
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 // Import new components from Figma design
 import { HeroSection } from "@/components/welcome/HeroSection";
@@ -31,6 +33,15 @@ const Welcome = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { session, authState } = useAuth();
+
+  // Redirect logged-in users to their dashboard
+  useEffect(() => {
+    if (authState === 'authenticated' && session) {
+      const redirectUrl = getDashboardUrlForUser(session);
+      navigate(redirectUrl);
+    }
+  }, [authState, session, navigate]);
 
   // Login Modal Component
   const LoginModal = () => {
@@ -64,7 +75,10 @@ const Welcome = () => {
         });
 
         setShowLogin(false);
-        navigate("/admin/dashboard");
+        // Get session and redirect to role-appropriate dashboard
+        const { data: sessionData } = await supabase.auth.getSession();
+        const redirectUrl = getDashboardUrlForUser(sessionData.session);
+        navigate(redirectUrl);
       } catch (error) {
         toast({
           title: "Login Failed",
@@ -83,6 +97,9 @@ const Welcome = () => {
             <DialogTitle className="text-2xl text-center text-gray-900">
               Welcome Back
             </DialogTitle>
+            <DialogDescription className="text-center text-gray-600">
+              Sign in to your account to continue
+            </DialogDescription>
           </DialogHeader>
 
           <form className="space-y-4 mt-4" onSubmit={handleLoginSubmit}>
@@ -247,7 +264,10 @@ const Welcome = () => {
         });
 
         setShowRegistration(false);
-        navigate("/admin/dashboard");
+        // Get session and redirect to role-appropriate dashboard
+        const { data: sessionData } = await supabase.auth.getSession();
+        const redirectUrl = getDashboardUrlForUser(sessionData.session);
+        navigate(redirectUrl);
       } catch (error) {
         toast({
           title: "Registration Failed",
@@ -266,6 +286,9 @@ const Welcome = () => {
             <DialogTitle className="text-2xl text-center text-gray-900">
               Create Your Free Account
             </DialogTitle>
+            <DialogDescription className="text-center text-gray-600">
+              Get started with Gemeos in just a few steps
+            </DialogDescription>
           </DialogHeader>
 
           <form className="space-y-4 mt-4" onSubmit={handleSubmit}>
@@ -406,6 +429,18 @@ const Welcome = () => {
       </Dialog>
     );
   };
+
+  // Show loading state while checking authentication
+  if (authState === 'authenticating') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

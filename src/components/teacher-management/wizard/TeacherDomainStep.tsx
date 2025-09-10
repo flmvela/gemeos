@@ -14,19 +14,9 @@ import { BookOpen, Plus, X, GraduationCap, Monitor, Users } from 'lucide-react';
 import { useTeacherWizardStore, type TeacherDomain } from '@/stores/teacher-wizard.store';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-
-// Mock domains - in production, these would come from the API
-const AVAILABLE_DOMAINS = [
-  { id: '1', name: 'Piano', category: 'Instruments' },
-  { id: '2', name: 'Guitar', category: 'Instruments' },
-  { id: '3', name: 'Violin', category: 'Instruments' },
-  { id: '4', name: 'Music Theory', category: 'Theory' },
-  { id: '5', name: 'Composition', category: 'Theory' },
-  { id: '6', name: 'Orchestra', category: 'Ensemble' },
-  { id: '7', name: 'Jazz Performance', category: 'Performance' },
-  { id: '8', name: 'Music Production', category: 'Technology' },
-  { id: '9', name: 'Audio Engineering', category: 'Technology' },
-];
+import { useDomains } from '@/hooks/useDomains';
+import { useAuth } from '@/hooks/useAuth';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const CERTIFICATION_LEVELS = [
   { value: 'basic', label: 'Basic', color: 'bg-gray-100 text-gray-700' },
@@ -37,11 +27,13 @@ const CERTIFICATION_LEVELS = [
 
 export const TeacherDomainStep: React.FC = () => {
   const { data, updateData, errors } = useTeacherWizardStore();
+  const { tenantData } = useAuth();
+  const { domains, loading } = useDomains(tenantData?.tenant_id);
   const domainData = data.domains;
   const [selectedDomainId, setSelectedDomainId] = useState<string>('');
 
   const handleSetPrimaryDomain = (domainId: string) => {
-    const domain = AVAILABLE_DOMAINS.find(d => d.id === domainId);
+    const domain = domains.find(d => d.id === domainId);
     if (domain) {
       updateData('domains', {
         primaryDomain: {
@@ -56,7 +48,7 @@ export const TeacherDomainStep: React.FC = () => {
   const handleAddAdditionalDomain = () => {
     if (!selectedDomainId) return;
     
-    const domain = AVAILABLE_DOMAINS.find(d => d.id === selectedDomainId);
+    const domain = domains.find(d => d.id === selectedDomainId);
     if (!domain) return;
 
     // Check if already added
@@ -124,19 +116,23 @@ export const TeacherDomainStep: React.FC = () => {
           Select the main subject this teacher will be teaching
         </p>
         
-        {!domainData.primaryDomain ? (
+        {loading ? (
+          <Skeleton className="h-10 max-w-md" />
+        ) : !domainData.primaryDomain ? (
           <Select onValueChange={handleSetPrimaryDomain}>
             <SelectTrigger className="max-w-md">
               <SelectValue placeholder="Choose primary domain" />
             </SelectTrigger>
             <SelectContent>
-              {AVAILABLE_DOMAINS.map(domain => (
+              {domains.map(domain => (
                 <SelectItem key={domain.id} value={domain.id}>
                   <div className="flex items-center gap-2">
                     <span>{domain.name}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {domain.category}
-                    </Badge>
+                    {domain.description && (
+                      <Badge variant="outline" className="text-xs">
+                        {domain.description.slice(0, 20)}
+                      </Badge>
+                    )}
                   </div>
                 </SelectItem>
               ))}
@@ -192,21 +188,25 @@ export const TeacherDomainStep: React.FC = () => {
         </p>
 
         <div className="flex gap-2 max-w-md">
-          <Select value={selectedDomainId} onValueChange={setSelectedDomainId}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Select a domain" />
-            </SelectTrigger>
-            <SelectContent>
-              {AVAILABLE_DOMAINS.filter(domain => 
-                domainData.primaryDomain?.id !== domain.id &&
-                !domainData.additionalDomains.some(d => d.id === domain.id)
-              ).map(domain => (
-                <SelectItem key={domain.id} value={domain.id}>
-                  {domain.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {loading ? (
+            <Skeleton className="h-10 flex-1" />
+          ) : (
+            <Select value={selectedDomainId} onValueChange={setSelectedDomainId}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select a domain" />
+              </SelectTrigger>
+              <SelectContent>
+                {domains.filter(domain => 
+                  domainData.primaryDomain?.id !== domain.id &&
+                  !domainData.additionalDomains.some(d => d.id === domain.id)
+                ).map(domain => (
+                  <SelectItem key={domain.id} value={domain.id}>
+                    {domain.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button 
             onClick={handleAddAdditionalDomain}
             disabled={!selectedDomainId}

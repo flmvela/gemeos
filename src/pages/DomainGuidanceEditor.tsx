@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDomains } from '@/hooks/useDomains';
+import { useDomainSlug } from '@/hooks/useDomainSlug';
 import { useGuidanceStatus } from '@/hooks/useGuidanceStatus';
 import { useGuidanceContent } from '@/hooks/useGuidanceContent';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import { DynamicBreadcrumb } from '@/components/navigation/DynamicBreadcrumb';
 import { getGuidanceIcon, getGuidanceDescription } from '@/lib/guidanceUtils';
 
 const DomainGuidanceEditor = () => {
-  const { domainId, area } = useParams<{ domainId: string; area: string }>();
+  const { domainId, slug, area } = useParams<{ domainId?: string; slug?: string; area: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { domains, loading: domainsLoading } = useDomains();
@@ -27,11 +28,16 @@ const DomainGuidanceEditor = () => {
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const domain = domains?.find(d => d.id === domainId);
-  const { guidanceStatus, loading: statusLoading } = useGuidanceStatus(domainId || '', domain?.name);
+  // Use slug resolution if we have a slug parameter, otherwise fallback to old domainId logic
+  const identifier = slug || domainId || '';
+  const { domain: resolvedDomain, loading: domainLoading } = useDomainSlug(identifier);
+  
+  // Find domain - use resolved domain if available, otherwise fallback to legacy logic
+  const domain = resolvedDomain || domains?.find(d => d.id === domainId);
+  const { guidanceStatus, loading: statusLoading } = useGuidanceStatus(domain?.id || '', domain?.name);
   
   console.log('DomainGuidanceEditor Debug:', {
-    domainId,
+    domainId: domain?.id || domainId,
     area,
     domain: domain?.name,
     domainsLoading,
@@ -39,7 +45,7 @@ const DomainGuidanceEditor = () => {
   });
   
   const { guidanceContent, loading: contentLoading, saveContent } = useGuidanceContent(
-    domainId || '', 
+    domain?.id || '', 
     domain?.name || '', 
     area || ''
   );
@@ -88,7 +94,11 @@ const DomainGuidanceEditor = () => {
 
 
   const handleBack = () => {
-    navigate(`/admin/domain/${domainId}/ai-guidance`);
+    if (slug) {
+      navigate(`/admin/domains/${slug}/ai-guidance`);
+    } else {
+      navigate(`/admin/domain/${domainId}/ai-guidance`);
+    }
   };
 
   const handleSave = async () => {
@@ -225,7 +235,7 @@ const DomainGuidanceEditor = () => {
             </CardHeader>
             <CardContent>
               <ExamplesManager 
-                domainId={domainId || ''}
+                domainId={domain?.id || ''}
                 domainName={domain.name}
                 area={area || ''}
               />

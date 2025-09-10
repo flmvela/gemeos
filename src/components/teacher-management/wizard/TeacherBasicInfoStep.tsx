@@ -16,7 +16,9 @@ export const TeacherBasicInfoStep: React.FC = () => {
   const basicInfo = data.basic;
 
   const handleChange = (field: keyof typeof basicInfo, value: any) => {
+    console.log(`TeacherBasicInfoStep - Updating field '${field}' with value:`, value);
     updateData('basic', { [field]: value });
+    console.log('TeacherBasicInfoStep - Updated data.basic:', { ...data.basic, [field]: value });
   };
 
   return (

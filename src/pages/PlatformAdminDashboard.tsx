@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -28,6 +29,7 @@ import { UserDropdown } from '../components/UserDropdown';
 // Platform Admin Dashboard Component
 export default function PlatformAdminDashboard() {
   const { session, isPlatformAdmin } = useAuth();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'statistics'>('list');
   const [stats, setStats] = useState<PlatformDashboardStats>({
@@ -316,7 +318,10 @@ export default function PlatformAdminDashboard() {
             </div>
             <div className="flex items-center gap-4">
               {viewMode === 'list' && (
-                <Button className="bg-gradient-to-r from-[#06b6d4] to-[#8b5cf6] text-white hover:from-[#0891b2] hover:to-[#7c3aed] px-4 py-2 rounded-md font-medium transition-all duration-200">
+                <Button 
+                  onClick={() => navigate('/admin/tenants/create?step=basic')}
+                  className="bg-gradient-to-r from-[#06b6d4] to-[#8b5cf6] text-white hover:from-[#0891b2] hover:to-[#7c3aed] px-4 py-2 rounded-md font-medium transition-all duration-200"
+                >
                   <PlusIcon className="w-4 h-4 mr-2" />
                   Add Tenant
                 </Button>
@@ -429,7 +434,11 @@ export default function PlatformAdminDashboard() {
                             </div>
                           </td>
                           <td className="py-3 px-4">
-                            <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                            <button 
+                              onClick={() => navigate(`/admin/tenants/${tenant.id}`)}
+                              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Edit tenant"
+                            >
                               <EditIcon className="w-4 h-4" />
                             </button>
                           </td>

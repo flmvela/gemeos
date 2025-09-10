@@ -9,7 +9,7 @@ export const mockUser: User = {
 };
 
 export const navigationItems: NavigationItem[] = [
-  { id: 'dashboard', label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, description: 'Overview and quick insights' },
+  { id: 'dashboard', label: 'Dashboard', href: '/admin/tenant-dashboard', icon: LayoutDashboard, description: 'Overview and quick insights' },
   { id: 'analytics', label: 'Analytics', href: '/admin/analytics', icon: BarChart3, description: 'Trends and detailed metrics' },
   { id: 'reports', label: 'Reports', href: '/admin/reports', icon: FileText, description: 'Export and scheduled reports' },
   { id: 'domains', label: 'Domains', href: '/admin/learning-domains', icon: Database, description: 'All learning domains' },

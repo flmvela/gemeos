@@ -37,7 +37,7 @@ import { SendInvitationModal } from './SendInvitationModal';
  * Main Tenant Admin Dashboard Component
  */
 export function TenantAdminDashboard() {
-  const { session, isTenantAdmin, hasPermission, loading: authLoading } = useAuth();
+  const { session, isTenantAdmin, hasPermission, authState } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showAddTeacher, setShowAddTeacher] = useState(false);
@@ -100,7 +100,7 @@ export function TenantAdminDashboard() {
   };
 
   // Loading state
-  if (authLoading || settingsLoading) {
+  if (authState === 'authenticating' || settingsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div data-testid="loading-spinner" className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />

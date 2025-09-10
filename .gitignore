@@ -39,3 +39,33 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Screenshots
+screenshots/
+*.png
+!screenshots/.gitkeep
+!.playwright-mcp/*.png
+
+# Test artifacts
+test-results/
+playwright-report/
+test-output.log
+test_reports/
+*.json
+!package.json
+!tsconfig.json
+!package-lock.json
+
+# Temporary script files
+scripts/db-utils/
+*.cjs
+!vite.config.cjs
+
+# Development artifacts
+backups/
+temp/
+tmp/
+
+# Python test files
+tests/python-tests/
+*.py

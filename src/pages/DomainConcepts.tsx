@@ -22,7 +22,7 @@ import { ConceptLinkingPanel } from '@/components/curriculum/ConceptLinkingPanel
 import { ConceptExtractionCard } from '@/components/curriculum/ConceptExtractionCard';
 import { ConceptDetailsPanel } from '@/components/curriculum/ConceptDetailsPanel';
 import { useConcepts, type Concept } from '@/hooks/useConcepts';
-import { useDomains } from '@/hooks/useDomains';
+import { useDomainSlug } from '@/hooks/useDomainSlug';
 import { useAuth } from '@/hooks/useAuth';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { useTriggerConceptStructuring } from '@/hooks/useTriggerConceptStructuring';
@@ -32,17 +32,12 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 export default function DomainConcepts() {
-  const {
-    domainSlug
-  } = useParams<{
-    domainSlug: string;
-  }>();
+  const { slug, domainSlug } = useParams<{ slug?: string; domainSlug?: string }>();
   const navigate = useNavigate();
-  const {
-    domains
-  } = useDomains();
-  const domain = domains.find(d => d.id === domainSlug);
-  const domainId = domainSlug || ''; // Use the URL parameter directly as domain ID
+  // Support both slug and domainSlug parameters for backward compatibility
+  const identifier = slug || domainSlug || '';
+  const { domain, loading: domainLoading, error: domainError } = useDomainSlug(identifier);
+  const domainId = domain?.id || ''; // Use resolved domain ID
 
   const {
     concepts,
@@ -96,8 +91,8 @@ export default function DomainConcepts() {
   const [newParentId, setNewParentId] = useState<string>('');
   const {
     user,
-    isAuthenticated,
-    loading: authLoading
+    session,
+    authState
   } = useAuth();
   const {
     toast
@@ -145,8 +140,8 @@ export default function DomainConcepts() {
   // Check if domain is empty (no concepts at all)
   const isDomainEmpty = concepts.length === 0;
   const handleConceptClick = (concept: Concept) => {
-    // Navigate to concept detail page
-    navigate(`/admin/domain/${domainSlug}/concepts/${concept.id}`);
+    // Navigate to concept detail page using slug
+    navigate(`/admin/domains/${identifier}/concepts/${concept.id}`);
   };
   const handleApproveAll = async () => {
     const aiSuggestedIds = concepts.filter(c => c.status === 'suggested').map(c => c.id);
@@ -342,7 +337,7 @@ export default function DomainConcepts() {
 
   // Navigate to concept detail page with relationships tab
   const handleManageRelationships = (concept: Concept) => {
-    navigate(`/admin/domain/${domainSlug}/concepts/${concept.id}?tab=relationships`);
+    navigate(`/admin/domains/${identifier}/concepts/${concept.id}?tab=relationships`);
   };
 
   // Hierarchy management handlers
@@ -410,8 +405,8 @@ export default function DomainConcepts() {
     }
   };
 
-  // Authentication check
-  if (authLoading || loading) {
+  // Authentication and domain loading check
+  if (authState === 'authenticating' || loading || domainLoading) {
     return (
       <PageContainer>
         <DomainContextHeader />
@@ -421,7 +416,22 @@ export default function DomainConcepts() {
       </PageContainer>
     );
   }
-  if (!isAuthenticated) {
+  
+  // Check for domain resolution error
+  if (domainError || !domain) {
+    return (
+      <PageContainer>
+        <DomainContextHeader />
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h2 className="text-lg font-medium text-gray-900 mb-2">Domain Not Found</h2>
+            <p className="text-gray-600">{domainError || "The requested domain could not be found."}</p>
+          </div>
+        </div>
+      </PageContainer>
+    );
+  }
+  if (!user || !session) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Card className="w-full max-w-md">

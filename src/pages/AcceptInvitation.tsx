@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getDashboardUrlForUser } from '@/utils/auth-redirects';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -221,8 +222,11 @@ const AcceptInvitation: React.FC = () => {
       setSuccess(true);
       
       // Redirect to dashboard after 2 seconds
-      setTimeout(() => {
-        navigate('/admin/dashboard', { replace: true });
+      setTimeout(async () => {
+        // Get fresh session to determine role-based redirect
+        const { data: session } = await supabase.auth.getSession();
+        const redirectUrl = getDashboardUrlForUser(session.session);
+        navigate(redirectUrl, { replace: true });
       }, 2000);
       
     } catch (err: any) {

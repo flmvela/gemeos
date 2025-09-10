@@ -41,7 +41,7 @@
 - System creates/updates user account
 - System assigns user to tenant with admin role
 - System displays success message
-- System auto-redirects to `/admin/dashboard`
+- System auto-redirects to `/admin/tenant-dashboard`
 
 **Stage 6: Dashboard Landing**
 - User lands on admin dashboard
@@ -564,7 +564,7 @@ supabase.auth.signInWithPassword({
     "tenant_id": "tenant-id",
     "role": "tenant_admin"
   },
-  "redirect": "/admin/dashboard"
+  "redirect": "/admin/tenant-dashboard"
 }
 ```
 

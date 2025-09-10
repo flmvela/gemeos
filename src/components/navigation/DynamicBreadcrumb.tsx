@@ -11,16 +11,25 @@ import {
 import { useBreadcrumb } from './BreadcrumbProvider';
 import { useDomains } from '@/hooks/useDomains';
 import { useConcepts } from '@/hooks/useConcepts';
+import { useDomainSlug } from '@/hooks/useDomainSlug';
 
 export function DynamicBreadcrumb() {
   const location = useLocation();
   const { breadcrumbs, setBreadcrumbs } = useBreadcrumb();
   const { domains } = useDomains();
   
-  // Extract domain ID for concept loading
+  // Extract domain info for concept loading - support both old and new patterns
   const pathSegments = location.pathname.split('/').filter(Boolean);
-  const domainId = pathSegments[0] === 'admin' && pathSegments[1] === 'domain' ? pathSegments[2] : '';
-  const { concepts } = useConcepts(domainId);
+  const isDomainRoute = pathSegments[0] === 'admin' && (pathSegments[1] === 'domain' || pathSegments[1] === 'domains');
+  const domainParam = isDomainRoute ? pathSegments[2] : '';
+  
+  // Use slug resolution for new routes, fallback to direct domain lookup for legacy routes
+  const isNewRoute = pathSegments[1] === 'domains';
+  const { domain: resolvedDomain } = useDomainSlug(isNewRoute ? domainParam : '');
+  const legacyDomain = !isNewRoute ? domains.find(d => d.id === domainParam) : null;
+  const currentDomain = resolvedDomain || legacyDomain;
+  
+  const { concepts } = useConcepts(currentDomain?.id || '');
 
   useEffect(() => {
     const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -29,7 +38,7 @@ export function DynamicBreadcrumb() {
     // Always start with Dashboard
     newBreadcrumbs.push({
       label: 'Dashboard',
-      href: '/admin/dashboard',
+      href: '/tenant/dashboard',
     });
 
     // Handle admin routes
@@ -39,15 +48,15 @@ export function DynamicBreadcrumb() {
           label: 'Learning Domains',
           href: '/admin/learning-domains',
         });
-      } else if (pathSegments[1] === 'domain' && pathSegments[2]) {
-        // Find domain name
-        const domainId = pathSegments[2];
-        const domain = domains.find(d => d.id === domainId);
-        const domainName = domain?.name || 'Domain';
+      } else if ((pathSegments[1] === 'domain' || pathSegments[1] === 'domains') && pathSegments[2]) {
+        // Handle both legacy (/admin/domain/{id}) and new (/admin/domains/{slug}) patterns
+        const domainParam = pathSegments[2];
+        const isNewRoute = pathSegments[1] === 'domains';
+        const domainName = currentDomain?.name || 'Domain';
 
         newBreadcrumbs.push({
           label: domainName,
-          href: `/admin/domain/${domainId}`,
+          href: isNewRoute ? `/admin/domains/${domainParam}` : `/admin/domain/${domainParam}`,
         });
 
         // Handle section pages
@@ -65,7 +74,7 @@ export function DynamicBreadcrumb() {
           const sectionName = sectionMap[pathSegments[3]] || pathSegments[3];
           newBreadcrumbs.push({
             label: sectionName,
-            href: `/admin/domain/${domainId}/${pathSegments[3]}`,
+            href: isNewRoute ? `/admin/domains/${domainParam}/${pathSegments[3]}` : `/admin/domain/${domainParam}/${pathSegments[3]}`,
           });
           
           // Handle concept detail pages: /admin/domain/{domainId}/concepts/{conceptId}
@@ -76,7 +85,7 @@ export function DynamicBreadcrumb() {
             
             newBreadcrumbs.push({
               label: conceptName,
-              href: `/admin/domain/${domainId}/concepts/${conceptId}`,
+              href: isNewRoute ? `/admin/domains/${domainParam}/concepts/${conceptId}` : `/admin/domain/${domainParam}/concepts/${conceptId}`,
             });
           }
           
@@ -87,14 +96,14 @@ export function DynamicBreadcrumb() {
             
             newBreadcrumbs.push({
               label: areaName,
-              href: `/admin/domain/${domainId}/ai-guidance/${area}`,
+              href: isNewRoute ? `/admin/domains/${domainParam}/ai-guidance/${area}` : `/admin/domain/${domainParam}/ai-guidance/${area}`,
             });
             
             // Handle examples pages: /admin/domain/{domainId}/ai-guidance/{area}/examples/new
             if (pathSegments[5] === 'examples' && pathSegments[6] === 'new') {
               newBreadcrumbs.push({
                 label: 'Add Examples',
-                href: `/admin/domain/${domainId}/ai-guidance/${area}/examples/new`,
+                href: isNewRoute ? `/admin/domains/${domainParam}/ai-guidance/${area}/examples/new` : `/admin/domain/${domainParam}/ai-guidance/${area}/examples/new`,
               });
             }
           }
@@ -115,7 +124,7 @@ export function DynamicBreadcrumb() {
           if (domain) {
             newBreadcrumbs.push({
               label: domain.name,
-              href: `/admin/domain/${domainParam}`,
+              href: `/admin/domains/${currentDomain?.name ? currentDomain.name.toLowerCase().replace(/\s+/g, '-') : domainParam}`,
             });
           }
         }

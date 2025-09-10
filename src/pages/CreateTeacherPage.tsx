@@ -5,6 +5,7 @@
 
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,9 +29,9 @@ import { TeacherScheduleStep } from '@/components/teacher-management/wizard/Teac
 import { TeacherPermissionsStep } from '@/components/teacher-management/wizard/TeacherPermissionsStep';
 import { TeacherReviewStep } from '@/components/teacher-management/wizard/TeacherReviewStep';
 import { cn } from '@/lib/utils';
-import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/use-toast';
+import { teacherService } from '@/services/teacher.service';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 
 const WIZARD_STEPS: Array<{
   key: TeacherWizardStep;
@@ -73,9 +74,8 @@ const WIZARD_STEPS: Array<{
 export const CreateTeacherPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { session } = useAuth();
+  const { session, tenantContext, isPlatformAdmin, isTenantAdmin } = useAuth();
 
   const {
     currentStep,
@@ -101,10 +101,43 @@ export const CreateTeacherPage: React.FC = () => {
     }
   }, []);
 
+  // Debug tenant data
+  useEffect(() => {
+    console.log('CreateTeacherPage - Current session:', session);
+    console.log('CreateTeacherPage - Current tenantContext:', tenantContext);
+    console.log('CreateTeacherPage - session.current_tenant:', session?.current_tenant);
+    console.log('CreateTeacherPage - Tenant ID from session:', session?.current_tenant?.tenant_id);
+    console.log('CreateTeacherPage - Tenant ID from context:', tenantContext?.tenant?.id);
+  }, [session, tenantContext]);
+
   // Update URL when step changes
   useEffect(() => {
     setSearchParams({ step: currentStep });
   }, [currentStep, setSearchParams]);
+
+  // Permission guard - only platform admin or tenant admin can create teachers
+  if (!isPlatformAdmin && !isTenantAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center gap-4">
+              <div className="p-3 bg-red-100 rounded-full">
+                <Shield className="w-8 h-8 text-red-600" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Access Denied</h3>
+                <p className="text-gray-600 mb-4">You do not have permission to create teachers.</p>
+                <Button onClick={() => navigate(-1)} variant="outline">
+                  Go Back
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const currentStepIndex = WIZARD_STEPS.findIndex(s => s.key === currentStep);
   const progressPercentage = ((currentStepIndex + 1) / WIZARD_STEPS.length) * 100;
@@ -137,23 +170,74 @@ export const CreateTeacherPage: React.FC = () => {
   };
 
   const handleCreate = async () => {
-    setLoading(true);
-    try {
-      // TODO: Implement teacher creation API call
-      console.log('Creating teacher with data:', data);
-      
-      toast({
-        title: 'Teacher Created',
-        description: `${data.basic.firstName} ${data.basic.lastName} has been successfully added.`,
-      });
-      
-      // Invalidate queries and navigate
-      queryClient.invalidateQueries({ queryKey: ['tenant-teachers'] });
-      navigate('/tenant/dashboard');
-    } catch (error) {
+    console.log('Creating teacher - Session:', session);
+    console.log('Creating teacher - TenantContext:', tenantContext);
+    console.log('Creating teacher - current_tenant:', session?.current_tenant);
+    
+    // Get the current store state directly
+    const currentStoreState = useTeacherWizardStore.getState();
+    console.log('CreateTeacherPage - Current store state:', currentStoreState);
+    console.log('CreateTeacherPage - Store data:', currentStoreState.data);
+    console.log('CreateTeacherPage - Store data.basic:', currentStoreState.data.basic);
+    
+    // The tenant ID can come from either current_tenant.tenant_id or tenantContext.tenant.id
+    const tenantId = session?.current_tenant?.tenant_id || tenantContext?.tenant?.id;
+    
+    if (!tenantId) {
+      console.error('No tenant context found. Session:', session, 'TenantContext:', tenantContext);
       toast({
         title: 'Error',
-        description: 'Failed to create teacher. Please try again.',
+        description: 'No tenant context found. Please refresh and try again.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    console.log('Using tenant ID:', tenantId);
+
+    console.log('CreateTeacherPage - Submitting teacher data:', {
+      data,
+      tenantId,
+      basicInfo: data.basic,
+      hasEmail: !!data.basic.email,
+      hasFirstName: !!data.basic.firstName,
+      hasLastName: !!data.basic.lastName
+    });
+    
+    // Use fresh data from the store
+    const freshData = currentStoreState.data;
+    
+    // Validate that required fields are filled
+    if (!freshData.basic.email || !freshData.basic.firstName || !freshData.basic.lastName) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all required fields (email, first name, last name)',
+        variant: 'destructive'
+      });
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // Create teacher invitation using the service with fresh data
+      const result = await teacherService.createTeacher(freshData, tenantId);
+      
+      toast({
+        title: 'Teacher Invitation Created',
+        description: freshData.basic.sendInvitation 
+          ? `An invitation has been sent to ${result.email}. They will receive an email to set up their password.`
+          : `Teacher invitation created for ${freshData.basic.firstName} ${freshData.basic.lastName}.`,
+      });
+      
+      // Reset wizard and navigate back to tenant dashboard
+      resetWizard();
+      navigate('/tenant/dashboard');
+    } catch (error) {
+      console.error('Error creating teacher invitation:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to create teacher invitation. Please try again.',
         variant: 'destructive'
       });
     } finally {
@@ -188,7 +272,7 @@ export const CreateTeacherPage: React.FC = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate('/admin/dashboard')}
+                onClick={() => navigate('/tenant/dashboard')}
                 className="gap-2"
               >
                 <ArrowLeft className="h-4 w-4" />

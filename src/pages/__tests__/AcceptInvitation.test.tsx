@@ -183,7 +183,7 @@ describe('AcceptInvitation Component', () => {
     });
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/admin/dashboard', { replace: true });
+      expect(mockNavigate).toHaveBeenCalledWith('/tenant/dashboard', { replace: true });
     }, { timeout: 3000 });
   });
 

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Page Layout Consistency', () => {
   const pages = [
-    { name: 'Admin Dashboard', url: '/admin/dashboard' },
+    { name: 'Admin Dashboard', url: '/admin/tenant-dashboard' },
     { name: 'Domain Detail', url: '/admin/domain/472a6e02-8733-431a-bb76-5d517767cab7' },
     { name: 'Domain Concepts', url: '/admin/domain/472a6e02-8733-431a-bb76-5d517767cab7/concepts' },
   ];

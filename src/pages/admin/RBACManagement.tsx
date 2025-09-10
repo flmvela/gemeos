@@ -354,7 +354,7 @@ export const RBACManagement: React.FC = () => {
         </Alert>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-6 p-6">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold">RBAC Management</h1>
@@ -454,114 +454,138 @@ export const RBACManagement: React.FC = () => {
                       Page Permissions
                     </CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Manage access to different pages organized by navigation sections
+                      Manage CRUD permissions for all pages with canonical names and URLs
                     </p>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {resources.filter(r => r.kind === 'page').length} pages across {pageHierarchy.length} sections
+                    {resources.filter(r => r.kind === 'page').length} pages total
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Role Headers */}
-                <div className="flex border-b-2 border-gray-200 mb-6 pb-4">
-                  <div className="flex-1 font-semibold text-gray-700">Pages</div>
-                  <div className="flex gap-4">
-                    {orderedRoles.map(role => (
-                      <div key={role.id} className="w-32 text-center">
-                        <div className="font-semibold text-sm">{role.display_name}</div>
-                        <div className="text-xs text-muted-foreground">{role.name}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Hierarchical Sections */}
-                <div className="space-y-6">
-                  {pageHierarchy.map(section => (
-                    <div key={section.section} className="border border-gray-200 rounded-lg overflow-hidden">
-                      {/* Section Header */}
-                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                        <div className="flex items-center gap-2">
-                          <section.icon className="h-5 w-5 text-blue-600" />
-                          <h3 className="font-semibold text-gray-800">{section.section}</h3>
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            {section.pages.length} pages
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Section Pages */}
-                      <div className="divide-y divide-gray-100">
-                        {section.pages.map((resource, index) => {
-                          // Determine if this is a child page (concept details, etc.)
-                          const isChildPage = resource.key.includes('concept') && 
-                            (resource.key.includes('detail') || resource.key.includes(':'));
-                          
-                          return (
-                            <div 
-                              key={resource.id} 
-                              className={`flex items-center px-4 py-4 hover:bg-gray-50 ${
-                                isChildPage ? 'pl-8 border-l-2 border-blue-200 ml-4' : ''
-                              }`}
-                            >
-                              {/* Page Info */}
-                              <div className="flex-1">
-                                <div className="flex items-start gap-2">
-                                  {isChildPage && (
-                                    <div className="flex items-center">
-                                      <div className="w-4 h-0.5 bg-gray-300 mr-2"></div>
-                                      <ChevronDown className="h-3 w-3 text-gray-400 rotate-[-90deg]" />
-                                    </div>
-                                  )}
-                                  <div className="flex-1">
-                                    <div className="font-medium text-sm">
-                                      {resource.key.replace('page:', '').replace(/_/g, ' ')}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      {resource.description}
-                                    </div>
-                                    <div className="flex gap-1 mt-2">
-                                      <Badge variant="secondary" className="text-xs">
-                                        {resource.category}
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Permission Columns */}
-                              <div className="flex gap-4">
-                                {orderedRoles.map(role => (
-                                  <div key={`${role.id}-${resource.id}`} className="w-32 text-center">
-                                    <div className="flex flex-wrap gap-1 justify-center">
-                                      {['read', 'write'].map(action => {
-                                        const hasPermission = permissionMatrix[role.id]?.[resource.id]?.includes(action);
-                                        return (
-                                          <Badge
-                                            key={action}
-                                            variant={hasPermission ? "default" : "outline"}
-                                            className={`cursor-pointer text-xs transition-colors ${
-                                              hasPermission 
-                                                ? "bg-green-500 hover:bg-green-600 text-white" 
-                                                : "hover:bg-gray-200"
-                                            }`}
-                                            onClick={() => togglePermission(role.id, resource.id, action)}
-                                          >
-                                            {action}
-                                          </Badge>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="font-semibold">Page Name</TableHead>
+                        <TableHead className="font-semibold">URL</TableHead>
+                        <TableHead className="font-semibold">Description</TableHead>
+                        <TableHead className="font-semibold">Category</TableHead>
+                        {/* Role Permission Columns */}
+                        {orderedRoles.map(role => (
+                          <TableHead key={role.id} className="text-center font-semibold">
+                            <div className="space-y-1">
+                              <div className="text-sm">{role.display_name}</div>
+                              <div className="text-xs text-muted-foreground">{role.name}</div>
                             </div>
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {resources
+                        .filter(r => r.kind === 'page')
+                        .map((resource) => {
+                          // Helper function to generate canonical page name and URL
+                          const getPageInfo = (key: string) => {
+                            const cleanKey = key.replace('page:', '');
+                            
+                            // Map specific pages to canonical names and URLs
+                            const pageMap: Record<string, { name: string; url: string }> = {
+                              'admin_dashboard': { name: 'Platform Admin Dashboard', url: '/admin/dashboard' },
+                              'tenant_dashboard': { name: 'Tenant Dashboard', url: '/tenant/dashboard' },
+                              'teacher_dashboard': { name: 'Teacher Dashboard', url: '/teacher/dashboard' },
+                              'domain_selection': { name: 'Domain Selection', url: '/teacher/domain-selection' },
+                              'curriculum_setup': { name: 'Curriculum Setup', url: '/teacher/settings/curriculum-setup' },
+                              'class_creation': { name: 'Class Creation', url: '/teacher/classes/create' },
+                              'administration': { name: 'Administration', url: '/teacher/administration' },
+                              'domain_management': { name: 'Domain Management', url: '/teacher/administration/domains' },
+                              'learning_goals': { name: 'Learning Goals', url: '/teacher/administration/learning-goals' },
+                              'domains_dashboard': { name: 'Domains Dashboard', url: '/admin/domains/dashboard' },
+                              'domain_admin': { name: 'Domain Admin', url: '/admin/domains/:slug' },
+                              'domain_concepts': { name: 'Domain Concepts', url: '/admin/domains/:slug/concepts' },
+                              'concept_detail': { name: 'Concept Detail', url: '/admin/domains/:slug/concepts/:id' },
+                              'domain_goals': { name: 'Domain Goals', url: '/admin/domains/:slug/goals' },
+                              'ai_guidance': { name: 'AI Guidance', url: '/admin/domains/:slug/ai-guidance' },
+                              'guidance_editor': { name: 'Guidance Editor', url: '/admin/domains/:slug/ai-guidance/:area' },
+                              'add_examples': { name: 'Add Examples', url: '/admin/domains/:slug/ai-guidance/:area/examples/new' },
+                              'clients': { name: 'Clients', url: '/admin/clients' },
+                              'permissions': { name: 'Permissions', url: '/admin/permissions' },
+                              'upload': { name: 'Upload', url: '/admin/upload' },
+                              'page_permissions': { name: 'Page Permissions', url: '/admin/page-permissions' },
+                              'ai_training': { name: 'AI Training', url: '/admin/ai-training' },
+                              'feedback_settings': { name: 'Feedback Settings', url: '/admin/settings/feedback' },
+                              'rbac_permissions': { name: 'RBAC Permissions', url: '/admin/rbac-permissions' },
+                              'rbac_management': { name: 'RBAC Management', url: '/admin/rbac-management' },
+                              'access_management': { name: 'Access Management', url: '/admin/access-management' },
+                              'tenant_management': { name: 'Tenant Management', url: '/admin/tenants' },
+                              'create_tenant': { name: 'Create Tenant', url: '/admin/tenants/create' },
+                              'edit_tenant': { name: 'Edit Tenant', url: '/admin/tenants/:id/edit' },
+                              'tenant_detail': { name: 'Tenant Detail', url: '/admin/tenants/:id' }
+                            };
+
+                            // Return mapped value or generate from key
+                            if (pageMap[cleanKey]) {
+                              return pageMap[cleanKey];
+                            }
+
+                            // Fallback: generate name and URL from key
+                            const name = cleanKey
+                              .replace(/_/g, ' ')
+                              .replace(/\b\w/g, l => l.toUpperCase());
+                            
+                            const url = `/${cleanKey.replace(/_/g, '/')}`;
+                            
+                            return { name, url };
+                          };
+
+                          const pageInfo = getPageInfo(resource.key);
+
+                          return (
+                            <TableRow key={resource.id} className="hover:bg-gray-50">
+                              <TableCell className="font-medium">
+                                {pageInfo.name}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm text-blue-600">
+                                {pageInfo.url}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {resource.description || 'No description available'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="text-xs">
+                                  {resource.category}
+                                </Badge>
+                              </TableCell>
+                              {/* Role Permission Cells */}
+                              {orderedRoles.map(role => (
+                                <TableCell key={`${role.id}-${resource.id}`} className="text-center px-2">
+                                  <div className="inline-grid grid-cols-2 gap-0.5 mx-auto">
+                                    {['create', 'read', 'update', 'delete'].map(action => {
+                                      const hasPermission = permissionMatrix[role.id]?.[resource.id]?.includes(action);
+                                      return (
+                                        <Badge
+                                          key={action}
+                                          variant={hasPermission ? "default" : "outline"}
+                                          className={`cursor-pointer text-xs transition-colors w-6 h-6 flex items-center justify-center rounded-full ${
+                                            hasPermission 
+                                              ? "bg-green-500 hover:bg-green-600 text-white" 
+                                              : "hover:bg-gray-200"
+                                          }`}
+                                          onClick={() => togglePermission(role.id, resource.id, action)}
+                                        >
+                                          {action.charAt(0).toUpperCase()}
+                                        </Badge>
+                                      );
+                                    })}
+                                  </div>
+                                </TableCell>
+                              ))}
+                            </TableRow>
                           );
                         })}
-                      </div>
-                    </div>
-                  ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>

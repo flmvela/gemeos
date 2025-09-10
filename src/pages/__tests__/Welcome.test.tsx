@@ -589,7 +589,7 @@ describe('Welcome Page Component', () => {
             })
           );
           
-          expect(mockNavigate).toHaveBeenCalledWith('/admin/dashboard');
+          expect(mockNavigate).toHaveBeenCalledWith('/tenant/dashboard');
         });
       });
 
@@ -677,7 +677,7 @@ describe('Welcome Page Component', () => {
             })
           );
           
-          expect(mockNavigate).toHaveBeenCalledWith('/admin/dashboard');
+          expect(mockNavigate).toHaveBeenCalledWith('/tenant/dashboard');
         });
       });
 
