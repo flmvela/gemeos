@@ -135,12 +135,13 @@ const developmentItems = [
   { title: "Unauthorized", url: "/unauthorized", icon: Shield },
 ]
 
-// Teacher Area items
+// Teacher Area items - aligned with RBAC permissions
 const teacherAreaItems = [
-  { title: "Classes", url: "/teacher/dashboard", icon: School },
-  { title: "Students", url: "/teacher/students", icon: UserCog },
-  { title: "Learning Concepts", url: "/teacher/learning-concepts", icon: Lightbulb },
-  { title: "Learning Goals", url: "/teacher/learning-goals", icon: Trophy },
+  { title: "Teacher Dashboard", url: "/teacher/dashboard", icon: School },
+  { title: "Domain Selection", url: "/teacher/domain-selection", icon: Globe },
+  { title: "Class Creation", url: "/teacher/classes/create", icon: BookOpen },
+  { title: "Curriculum Setup", url: "/teacher/settings/curriculum-setup", icon: GraduationCap },
+  { title: "Learning Goals", url: "/teacher/administration/learning-goals", icon: Trophy },
 ]
 
 // Tenant Admin items - aligned with RBAC permissions
@@ -520,6 +521,33 @@ export function AppSidebar() {
                       isValidPage={isValidPage}
                     />
                   </div>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Teacher Dashboard - For Teachers only (not tenant admins) */}
+        {isTeacher && !isTenantAdmin && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Teacher Dashboard">
+                    <NavLink 
+                      to="/teacher/dashboard" 
+                      className={({ isActive }) => 
+                        `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-white ${
+                          isActive 
+                            ? 'bg-[#2d2e5f] text-white font-medium' 
+                            : 'hover:bg-gray-700'
+                        }`
+                      }
+                    >
+                      <GraduationCap className="h-4 w-4" />
+                      <span className="group-data-[collapsible=icon]:hidden">Teacher Dashboard</span>
+                    </NavLink>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
