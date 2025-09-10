@@ -260,10 +260,7 @@ export function AppSidebar() {
   const [isAuthPagesExpanded, setIsAuthPagesExpanded] = useState(false)
   const [isDevelopmentExpanded, setIsDevelopmentExpanded] = useState(false)
   const [isTeacherAreaExpanded, setIsTeacherAreaExpanded] = useState(
-    currentPath.startsWith('/teacher/classes') ||
-    currentPath.startsWith('/teacher/students') ||
-    currentPath.startsWith('/teacher/learning-concepts') ||
-    currentPath.startsWith('/teacher/learning-goals')
+    currentPath.startsWith('/teacher/') || isTeacher || isTenantAdmin
   )
   
   // Flyout state management for collapsed sidebar
@@ -275,6 +272,9 @@ export function AppSidebar() {
   
   // Check if user is platform admin
   const isAdmin = isPlatformAdmin
+  
+  // Development mode flag (set to false in production)
+  const isDevelopmentMode = false
 
   // Flyout management functions
   const handleFlyoutMouseEnter = (sectionKey: string) => {
@@ -1132,35 +1132,37 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Quick Access Section - Available for all users */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-gray-400 text-xs font-semibold uppercase tracking-wider group-data-[collapsible=icon]:hidden">Quick Access</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {quickAccessPages
-                .filter(page => isValidQuickPage(page.url))
-                .map((page) => (
-                  <SidebarMenuItem key={page.title}>
-                    <SidebarMenuButton asChild tooltip={page.title}>
-                      <NavLink 
-                        to={page.url} 
-                        className={({ isActive }) => 
-                          `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-white ${
-                            isActive 
-                              ? 'bg-[#2d2e5f] text-white font-medium' 
-                              : 'hover:bg-gray-700'
-                          }`
-                        }
-                      >
-                        <page.icon className="h-4 w-4" />
-                        <span className="group-data-[collapsible=icon]:hidden">{page.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Quick Access Section - Only for admins and development */}
+        {(isAdmin || isDevelopmentMode) && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-gray-400 text-xs font-semibold uppercase tracking-wider group-data-[collapsible=icon]:hidden">Quick Access</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {quickAccessPages
+                  .filter(page => isValidQuickPage(page.url))
+                  .map((page) => (
+                    <SidebarMenuItem key={page.title}>
+                      <SidebarMenuButton asChild tooltip={page.title}>
+                        <NavLink 
+                          to={page.url} 
+                          className={({ isActive }) => 
+                            `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-white ${
+                              isActive 
+                                ? 'bg-[#2d2e5f] text-white font-medium' 
+                                : 'hover:bg-gray-700'
+                            }`
+                          }
+                        >
+                          <page.icon className="h-4 w-4" />
+                          <span className="group-data-[collapsible=icon]:hidden">{page.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       {/* Usage Stats Footer - Admin Only */}
