@@ -143,12 +143,15 @@ const teacherAreaItems = [
   { title: "Learning Goals", url: "/teacher/learning-goals", icon: Trophy },
 ]
 
-// Tenant Admin items
+// Tenant Admin items - aligned with RBAC permissions
 const tenantAdminItems = [
   { title: "Tenant Dashboard", url: "/tenant/dashboard", icon: Calendar },
   { title: "Teacher Management", url: "/tenant/teachers", icon: Users },
   { title: "Student Management", url: "/tenant/students", icon: GraduationCap },
   { title: "Class Management", url: "/tenant/classes", icon: BookOpen },
+  { title: "Domain Management", url: "/admin/domains/dashboard", icon: Globe },
+  { title: "Access Management", url: "/admin/access-management", icon: Shield },
+  { title: "Curriculum Setup", url: "/teacher/settings/curriculum-setup", icon: GraduationCap },
   { title: "Reports", url: "/tenant/reports", icon: FileText },
   { title: "Settings", url: "/tenant/settings", icon: Settings },
 ]

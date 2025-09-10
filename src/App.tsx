@@ -46,8 +46,10 @@ import { TenantManagementSimple } from "./pages/TenantManagementSimple";
 import { CreateTenantPage } from "./pages/CreateTenantPage";
 import { EditTenantPage } from "./pages/EditTenantPage";
 import { TenantDetailEditPage } from "./pages/TenantDetailEditPage";
+import { CreateTeacherPage } from "./pages/CreateTeacherPage";
 import ClassCreation from "./pages/ClassCreation";
 import NoAccess from "./pages/NoAccess";
+import TeacherSetupPassword from "./pages/TeacherSetupPassword";
 
 const queryClient = new QueryClient();
 
@@ -68,6 +70,7 @@ const App = () => (
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/accept-invite" element={<AcceptInvitation />} />
+          <Route path="/teacher-setup" element={<TeacherSetupPassword />} />
           <Route path="/teacher/*" element={
             <TeacherLayout>
               <Routes>
@@ -287,6 +290,11 @@ const App = () => (
                     <CreateTenantPage />
                   </RouteProtection>
                 } />
+                <Route path="teacher/create" element={
+                  <RouteProtection>
+                    <CreateTeacherPage />
+                  </RouteProtection>
+                } />
                 <Route path="tenants/:tenantId/edit" element={
                   <RouteProtection>
                     <EditTenantPage />
@@ -306,6 +314,40 @@ const App = () => (
                 <Route path="dashboard" element={
                   <RouteProtection>
                     <AdminDashboard />
+                  </RouteProtection>
+                } />
+                <Route path="teachers" element={
+                  <RouteProtection>
+                    <CreateTeacherPage />
+                  </RouteProtection>
+                } />
+                <Route path="students" element={
+                  <RouteProtection>
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Student Management</h1>
+                      <p className="text-gray-600 mt-2">Manage students in your tenant</p>
+                    </div>
+                  </RouteProtection>
+                } />
+                <Route path="classes" element={
+                  <RouteProtection>
+                    <ClassCreation />
+                  </RouteProtection>
+                } />
+                <Route path="reports" element={
+                  <RouteProtection>
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Reports</h1>
+                      <p className="text-gray-600 mt-2">View tenant reports and analytics</p>
+                    </div>
+                  </RouteProtection>
+                } />
+                <Route path="settings" element={
+                  <RouteProtection>
+                    <div className="p-8">
+                      <h1 className="text-2xl font-bold">Tenant Settings</h1>
+                      <p className="text-gray-600 mt-2">Configure tenant settings</p>
+                    </div>
                   </RouteProtection>
                 } />
               </Routes>
