@@ -109,6 +109,7 @@ const adminDashboardManagementItems = [
 const domainManagementItems = [
   { title: "Domain Administration", url: "/admin/domains/dashboard", icon: Settings },
   { title: "Learning Goals", url: "/admin/domains/jazz-music/goals", icon: Target },
+  { title: "Review AI", url: "/admin/domains/jazz-music/review-ai", icon: Lightbulb },
   { title: "AI Guidance", url: "/admin/domains/jazz-music/ai-guidance", icon: Brain },
   { title: "Guidance Editor", url: "/admin/domains/jazz-music/ai-guidance/content", icon: FileText },
   { title: "Examples", url: "/admin/domains/jazz-music/ai-guidance/content/examples/new", icon: Plus },
@@ -138,10 +139,12 @@ const developmentItems = [
 // Teacher Area items - aligned with RBAC permissions
 const teacherAreaItems = [
   { title: "Teacher Dashboard", url: "/teacher/dashboard", icon: School },
+  { title: "Students", url: "/teacher/students", icon: Users },
   { title: "Domain Selection", url: "/teacher/domain-selection", icon: Globe },
   { title: "Class Creation", url: "/teacher/classes/create", icon: BookOpen },
   { title: "Curriculum Setup", url: "/teacher/settings/curriculum-setup", icon: GraduationCap },
   { title: "Learning Goals", url: "/teacher/administration/learning-goals", icon: Trophy },
+  { title: "Review AI", url: "/teacher/review-ai", icon: Lightbulb },
 ]
 
 // Tenant Admin items - aligned with RBAC permissions
@@ -151,6 +154,7 @@ const tenantAdminItems = [
   { title: "Student Management", url: "/tenant/students", icon: GraduationCap },
   { title: "Class Management", url: "/tenant/classes", icon: BookOpen },
   { title: "Domain Management", url: "/admin/domains/dashboard", icon: Globe },
+  { title: "Review AI", url: "/admin/domains/jazz-music/review-ai", icon: Lightbulb },
   { title: "Access Management", url: "/admin/access-management", icon: Shield },
   { title: "Curriculum Setup", url: "/teacher/settings/curriculum-setup", icon: GraduationCap },
   { title: "Reports", url: "/tenant/reports", icon: FileText },

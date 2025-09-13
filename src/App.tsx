@@ -9,6 +9,10 @@ import Welcome from "./pages/Welcome";
 import TeacherDomainSelection from "./pages/TeacherDomainSelection";
 import CurriculumSetup from "./pages/CurriculumSetup";
 import TeacherDashboard from "./pages/TeacherDashboard";
+import ClassDetail from "./pages/ClassDetail";
+import StudentsList from "./pages/StudentsList";
+import AddStudent from "./pages/AddStudent";
+import EditStudent from "./pages/EditStudent";
 import Administration from "./pages/Administration";
 import DomainManagement from "./pages/DomainManagement";
 import DomainDetail from "./pages/DomainDetail";
@@ -44,12 +48,17 @@ import AccessManagement from "./pages/AccessManagement";
 import { TenantManagement } from "./pages/TenantManagement";
 import { TenantManagementSimple } from "./pages/TenantManagementSimple";
 import { CreateTenantPage } from "./pages/CreateTenantPage";
+import ReviewAI from "./pages/ReviewAI";
 import { EditTenantPage } from "./pages/EditTenantPage";
 import { TenantDetailEditPage } from "./pages/TenantDetailEditPage";
 import { CreateTeacherPage } from "./pages/CreateTeacherPage";
+import { EditTeacherPage } from "./pages/EditTeacherPage";
 import ClassCreation from "./pages/ClassCreation";
 import NoAccess from "./pages/NoAccess";
 import TeacherSetupPassword from "./pages/TeacherSetupPassword";
+import StudentSetupPassword from "./pages/StudentSetupPassword";
+import StudentDashboard from "./pages/StudentDashboard";
+import { TestClassConcepts } from "./pages/TestClassConcepts";
 
 const queryClient = new QueryClient();
 
@@ -71,6 +80,12 @@ const App = () => (
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/accept-invite" element={<AcceptInvitation />} />
           <Route path="/teacher-setup" element={<TeacherSetupPassword />} />
+          <Route path="/student-setup" element={<StudentSetupPassword />} />
+          <Route path="/student/dashboard" element={
+            <RouteProtection>
+              <StudentDashboard />
+            </RouteProtection>
+          } />
           <Route path="/teacher/*" element={
             <TeacherLayout>
               <Routes>
@@ -92,6 +107,36 @@ const App = () => (
                 <Route path="classes/create" element={
                   <RouteProtection>
                     <ClassCreation />
+                  </RouteProtection>
+                } />
+                <Route path="classes/:classId" element={
+                  <RouteProtection>
+                    <ClassDetail />
+                  </RouteProtection>
+                } />
+                <Route path="review-ai" element={
+                  <RouteProtection>
+                    <ReviewAI />
+                  </RouteProtection>
+                } />
+                <Route path="classes/:classId/concepts" element={
+                  <RouteProtection>
+                    <TestClassConcepts />
+                  </RouteProtection>
+                } />
+                <Route path="students" element={
+                  <RouteProtection>
+                    <StudentsList />
+                  </RouteProtection>
+                } />
+                <Route path="students/add" element={
+                  <RouteProtection>
+                    <AddStudent />
+                  </RouteProtection>
+                } />
+                <Route path="students/:studentId/edit" element={
+                  <RouteProtection>
+                    <EditStudent />
                   </RouteProtection>
                 } />
                 <Route path="administration" element={
@@ -191,6 +236,11 @@ const App = () => (
                 <Route path="domains/:slug/ai-guidance/:area/examples/new" element={
                   <RouteProtection>
                     <AddExamplesPage />
+                  </RouteProtection>
+                } />
+                <Route path="domains/:slug/review-ai" element={
+                  <RouteProtection>
+                    <ReviewAI />
                   </RouteProtection>
                 } />
                 
@@ -319,6 +369,11 @@ const App = () => (
                 <Route path="teachers" element={
                   <RouteProtection>
                     <CreateTeacherPage />
+                  </RouteProtection>
+                } />
+                <Route path="teachers/edit/:teacherId" element={
+                  <RouteProtection>
+                    <EditTeacherPage />
                   </RouteProtection>
                 } />
                 <Route path="students" element={
