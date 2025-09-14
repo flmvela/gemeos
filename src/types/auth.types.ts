@@ -152,6 +152,7 @@ export interface AuthSession {
   tenants: UserTenantWithDetails[];
   current_tenant?: UserTenantWithDetails;
   is_platform_admin: boolean;
+  user?: any; // Add the raw user object with metadata
 }
 
 export interface UserTenantWithDetails extends UserTenant {

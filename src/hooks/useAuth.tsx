@@ -242,7 +242,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isPlatformAdmin: session?.is_platform_admin || false,
     isTenantAdmin: session?.current_tenant?.role?.name === 'tenant_admin' || false,
     isTeacher: session?.current_tenant?.role?.name === 'teacher' || false,
-    isStudent: session?.current_tenant?.role?.name === 'student' || false
+    isStudent: session?.user?.user_metadata?.role === 'student' || 
+               session?.user?.app_metadata?.role === 'student' || 
+               false
   };
 
   return (

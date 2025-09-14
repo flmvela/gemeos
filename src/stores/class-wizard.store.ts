@@ -31,19 +31,38 @@ export interface DifficultyLevel {
 export interface ClassConfiguration {
   className: string;
   description: string;
-  difficultyLevelId: string | null;
+  difficultyLevelIds: string[]; // Changed to support multiple difficulty levels
+  difficultyProgression: 'single' | 'sequential' | 'mixed'; // How difficulties are handled
   frequency: 'weekly' | 'bi-weekly' | 'monthly';
   allowsStudentMessages: boolean;
   maxStudents: number;
+  minStudents?: number;
 }
 
 export interface ClassSession {
   id?: string; // temporary ID for UI
   sessionName?: string;
-  sessionDate: string; // YYYY-MM-DD format
-  startTime: string; // HH:MM format
-  endTime: string; // HH:MM format
-  timeZone: string;
+  sessionType?: 'single' | 'recurring';
+  sessionDate?: string; // YYYY-MM-DD format for single sessions
+  dayOfWeek?: string; // Day name for recurring sessions (e.g., 'monday')
+  startTime?: string; // HH:MM format
+  endTime?: string; // HH:MM format
+  duration?: number; // Duration in minutes
+  timeZone?: string;
+  location?: 'online' | 'in-person' | 'hybrid';
+  roomUrl?: string; // For online sessions (deprecated, use meetingLink)
+  meetingLink?: string; // For online sessions
+  physicalLocation?: string; // For in-person sessions (deprecated, use locationAddress)
+  locationAddress?: string; // For in-person sessions
+  sendCalendarInvites?: boolean; // Send calendar invitations to students
+}
+
+export interface RecurrencePattern {
+  pattern: 'weekly' | 'bi-weekly' | 'monthly';
+  endType: 'date' | 'occurrences';
+  endDate?: string; // YYYY-MM-DD
+  occurrences?: number;
+  exceptions?: string[]; // Dates to skip (holidays)
 }
 
 export interface StudentInformation {
@@ -56,13 +75,18 @@ export interface StudentInformation {
 
 export interface StudentManagement {
   students: StudentInformation[];
-  defaultCustomMessage: string;
+  enrollmentType?: 'invite-only' | 'open' | 'both';
+  enrollmentCode?: string;
+  studentEmails?: string[];
+  sendInvitesImmediately?: boolean;
+  defaultCustomMessage?: string;
 }
 
 export interface WizardData {
   domain: DomainSelection;
   configuration: ClassConfiguration;
   sessions: ClassSession[];
+  recurrence?: RecurrencePattern; // Optional recurrence pattern for sessions
   students: StudentManagement;
 }
 
@@ -102,6 +126,8 @@ interface ClassWizardState {
   addSession: (session: ClassSession) => void;
   updateSession: (index: number, session: Partial<ClassSession>) => void;
   removeSession: (index: number) => void;
+  updateRecurrence: (recurrence: RecurrencePattern | undefined) => void;
+  generateRecurringSessions: (baseSession: ClassSession, pattern: RecurrencePattern) => void;
   updateStudentManagement: (students: Partial<StudentManagement>) => void;
   addStudent: (student: StudentInformation) => void;
   updateStudent: (index: number, student: Partial<StudentInformation>) => void;
@@ -137,14 +163,21 @@ const initialData: WizardData = {
   configuration: {
     className: '',
     description: '',
-    difficultyLevelId: null,
+    difficultyLevelIds: [], // Changed to array
+    difficultyProgression: 'single',
     frequency: 'weekly',
     allowsStudentMessages: false,
-    maxStudents: 30
+    maxStudents: 30,
+    minStudents: 1
   },
   sessions: [],
+  recurrence: undefined,
   students: {
     students: [],
+    enrollmentType: 'invite-only',
+    enrollmentCode: '',
+    studentEmails: [],
+    sendInvitesImmediately: true,
     defaultCustomMessage: ''
   }
 };
@@ -260,17 +293,21 @@ export const useClassWizardStore = create<ClassWizardState>()(
           );
 
           // Auto-generate class name if not provided
-          if (config.className === undefined && config.difficultyLevelId) {
+          if (config.className === undefined && config.difficultyLevelIds && config.difficultyLevelIds.length > 0) {
             const { data } = get();
             const selectedDomain = data.domain.availableDomains.find(
               d => d.id === data.domain.selectedDomainId
             );
+            const firstLevelId = config.difficultyLevelIds[0];
             const selectedLevel = selectedDomain?.difficultyLevels.find(
-              l => l.id === config.difficultyLevelId
+              l => l.id === firstLevelId
             );
             
             if (selectedDomain && selectedLevel && !data.configuration.className) {
-              const autoName = `${selectedLevel.level_name} ${selectedDomain.name}`;
+              const levelText = config.difficultyLevelIds.length > 1 
+                ? `${selectedLevel.level_name}+` 
+                : selectedLevel.level_name;
+              const autoName = `${levelText} ${selectedDomain.name}`;
               set(
                 (state) => ({
                   data: {
@@ -345,6 +382,73 @@ export const useClassWizardStore = create<ClassWizardState>()(
           );
         },
 
+        updateRecurrence: (recurrence) => {
+          set(
+            (state) => ({
+              data: {
+                ...state.data,
+                recurrence
+              }
+            }),
+            false,
+            'updateRecurrence'
+          );
+        },
+
+        generateRecurringSessions: (baseSession, pattern) => {
+          const sessions: ClassSession[] = [];
+          const { pattern: recPattern, endType, endDate, occurrences } = pattern;
+          
+          // Calculate how many sessions to generate
+          let sessionCount = 0;
+          let currentDate = new Date(baseSession.sessionDate || new Date().toISOString().split('T')[0]);
+          
+          if (endType === 'occurrences' && occurrences) {
+            sessionCount = occurrences;
+          } else if (endType === 'date' && endDate) {
+            const end = new Date(endDate);
+            const weeks = Math.ceil((end.getTime() - currentDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+            sessionCount = recPattern === 'weekly' ? weeks : recPattern === 'bi-weekly' ? Math.ceil(weeks / 2) : Math.ceil(weeks / 4);
+          }
+          
+          // Generate sessions
+          for (let i = 0; i < Math.min(sessionCount, 52); i++) { // Max 52 sessions (1 year)
+            const sessionDate = new Date(currentDate);
+            
+            // Add interval based on pattern
+            if (recPattern === 'weekly') {
+              sessionDate.setDate(sessionDate.getDate() + (i * 7));
+            } else if (recPattern === 'bi-weekly') {
+              sessionDate.setDate(sessionDate.getDate() + (i * 14));
+            } else if (recPattern === 'monthly') {
+              sessionDate.setMonth(sessionDate.getMonth() + i);
+            }
+            
+            // Skip if in exceptions
+            const dateStr = sessionDate.toISOString().split('T')[0];
+            if (pattern.exceptions?.includes(dateStr)) continue;
+            
+            sessions.push({
+              ...baseSession,
+              id: `session-${i}-${Date.now()}`,
+              sessionDate: dateStr,
+              sessionType: 'recurring'
+            });
+          }
+          
+          set(
+            (state) => ({
+              data: {
+                ...state.data,
+                sessions,
+                recurrence: pattern
+              }
+            }),
+            false,
+            'generateRecurringSessions'
+          );
+        },
+
         updateStudentManagement: (students) => {
           set(
             (state) => ({
@@ -413,7 +517,15 @@ export const useClassWizardStore = create<ClassWizardState>()(
 
         // Wizard control
         openWizard: () => {
+          // Reset data to initial state while preserving loaded domains
           set({
+            data: {
+              ...initialData,
+              domain: {
+                ...initialData.domain,
+                availableDomains: get().data.domain.availableDomains // Preserve loaded domains
+              }
+            },
             isOpen: true,
             currentStep: 'domain',
             completedSteps: new Set(),
@@ -464,14 +576,17 @@ export const useClassWizardStore = create<ClassWizardState>()(
               if (data.configuration.className.length < 3) {
                 errors.push('Class name must be at least 3 characters');
               }
-              if (!data.configuration.difficultyLevelId) {
-                errors.push('Please select a difficulty level');
+              if (data.configuration.difficultyLevelIds.length === 0) {
+                errors.push('Please select at least one difficulty level');
               }
               if (data.configuration.maxStudents < 1) {
                 errors.push('Maximum students must be at least 1');
               }
               if (data.configuration.maxStudents > 100) {
                 errors.push('Maximum students cannot exceed 100');
+              }
+              if (data.configuration.minStudents && data.configuration.minStudents > data.configuration.maxStudents) {
+                errors.push('Minimum students cannot exceed maximum students');
               }
               break;
 
@@ -481,26 +596,48 @@ export const useClassWizardStore = create<ClassWizardState>()(
               }
               
               for (const [index, session] of data.sessions.entries()) {
-                if (!session.sessionDate) {
-                  errors.push(`Session ${index + 1}: Date is required`);
+                if (session.sessionType === 'single' && !session.sessionDate) {
+                  errors.push(`Session ${index + 1}: Date is required for single sessions`);
+                }
+                if (session.sessionType === 'recurring' && session.dayOfWeek === undefined) {
+                  errors.push(`Session ${index + 1}: Day of week is required for recurring sessions`);
                 }
                 if (!session.startTime) {
                   errors.push(`Session ${index + 1}: Start time is required`);
                 }
-                if (!session.endTime) {
-                  errors.push(`Session ${index + 1}: End time is required`);
+                // Check for either duration or endTime
+                if (!session.duration && !session.endTime) {
+                  errors.push(`Session ${index + 1}: Duration is required`);
                 }
                 if (session.startTime && session.endTime && session.startTime >= session.endTime) {
                   errors.push(`Session ${index + 1}: End time must be after start time`);
                 }
               }
+              
+              // Validate recurrence if present
+              if (data.recurrence) {
+                if (data.recurrence.endType === 'date' && !data.recurrence.endDate) {
+                  errors.push('End date is required for date-based recurrence');
+                }
+                if (data.recurrence.endType === 'occurrences' && !data.recurrence.occurrences) {
+                  errors.push('Number of occurrences is required');
+                }
+              }
               break;
 
             case 'students':
-              if (data.students.students.length === 0) {
-                errors.push('At least one student is required');
+              // Check if we have either students or student emails
+              const hasStudents = data.students.students.length > 0;
+              const hasStudentEmails = (data.students.studentEmails?.length || 0) > 0;
+              const isOpenEnrollment = data.students.enrollmentType === 'open';
+              
+              // For open enrollment, students are optional
+              // For invite-only, we need at least one student or email
+              if (!isOpenEnrollment && !hasStudents && !hasStudentEmails) {
+                errors.push('At least one student email is required for invite-only enrollment');
               }
               
+              // Validate full student objects if present
               const emails = new Set<string>();
               for (const [index, student] of data.students.students.entries()) {
                 if (!student.firstName.trim()) {
@@ -524,6 +661,22 @@ export const useClassWizardStore = create<ClassWizardState>()(
                     errors.push(`Duplicate email address: ${student.email}`);
                   } else {
                     emails.add(student.email.toLowerCase());
+                  }
+                }
+              }
+              
+              // Validate student emails if present
+              if (data.students.studentEmails) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                for (const email of data.students.studentEmails) {
+                  if (!emailRegex.test(email)) {
+                    errors.push(`Invalid email address: ${email}`);
+                  }
+                  // Check for duplicates
+                  if (emails.has(email.toLowerCase())) {
+                    errors.push(`Duplicate email address: ${email}`);
+                  } else {
+                    emails.add(email.toLowerCase());
                   }
                 }
               }
@@ -672,22 +825,68 @@ export const useConfigurationStep = () => {
 };
 
 export const useSessionsStep = () => {
-  const sessions = useClassWizardStore((state) => state.data.sessions);
-  const updateSessions = useClassWizardStore((state) => state.updateSessions);
-  const addSession = useClassWizardStore((state) => state.addSession);
-  const updateSession = useClassWizardStore((state) => state.updateSession);
-  const removeSession = useClassWizardStore((state) => state.removeSession);
-  const errors = useClassWizardStore((state) => state.errors.sessions || []);
-  const validate = useClassWizardStore((state) => state.validateStep);
+  const state = useClassWizardStore((state) => state);
+  const errors = state.errors.sessions || [];
+  
+  // Create a comprehensive data object for sessions
+  const data = {
+    sessions: state.data.sessions || [],
+    recurrence: state.data.recurrence,
+    sessionType: (state.data.sessions?.length > 0 && state.data.recurrence) ? 'recurring' : 'single',
+    location: state.data.sessions?.[0]?.location || 'online',
+    locationAddress: state.data.sessions?.[0]?.locationAddress,
+    meetingLink: state.data.sessions?.[0]?.meetingLink,
+    sendCalendarInvites: state.data.sessions?.[0]?.sendCalendarInvites ?? true
+  };
+  
+  // Update function that handles all session-related data
+  const update = (updates: Partial<typeof data>) => {
+    if (updates.sessions !== undefined) {
+      state.updateSessions(updates.sessions);
+    }
+    if (updates.recurrence !== undefined) {
+      state.updateRecurrence(updates.recurrence);
+    }
+    // Handle other properties by updating the first session
+    if (updates.location !== undefined || updates.locationAddress !== undefined || 
+        updates.meetingLink !== undefined || updates.sendCalendarInvites !== undefined) {
+      const currentSessions = state.data.sessions || [];
+      if (currentSessions.length > 0) {
+        const updatedSession = {
+          ...currentSessions[0],
+          ...(updates.location !== undefined && { location: updates.location }),
+          ...(updates.locationAddress !== undefined && { locationAddress: updates.locationAddress }),
+          ...(updates.meetingLink !== undefined && { meetingLink: updates.meetingLink }),
+          ...(updates.sendCalendarInvites !== undefined && { sendCalendarInvites: updates.sendCalendarInvites })
+        };
+        state.updateSession(0, updatedSession);
+      } else {
+        // Initialize with a new session if none exists
+        state.updateSessions([{
+          dayOfWeek: 'monday',
+          startTime: '15:00',
+          duration: 60,
+          location: updates.location || 'online',
+          locationAddress: updates.locationAddress,
+          meetingLink: updates.meetingLink,
+          sendCalendarInvites: updates.sendCalendarInvites ?? true
+        }]);
+      }
+    }
+    // Handle sessionType changes
+    if (updates.sessionType !== undefined) {
+      // This is handled in the component
+    }
+  };
   
   return { 
-    sessions, 
-    updateSessions, 
-    addSession, 
-    updateSession, 
-    removeSession, 
+    data,
+    update,
+    addSession: state.addSession,
+    updateSession: state.updateSession,
+    removeSession: state.removeSession,
     errors, 
-    validate: () => validate('sessions') 
+    validate: () => state.validateStep('sessions') 
   };
 };
 

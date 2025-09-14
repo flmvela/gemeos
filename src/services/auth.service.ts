@@ -199,7 +199,8 @@ export class AuthService {
           role: primaryTenant.user_roles,
           is_primary: primaryTenant.is_primary
         } : null,
-        is_platform_admin: isPlatformAdmin
+        is_platform_admin: isPlatformAdmin,
+        user: user // Include the raw user object with metadata
       };
       
       // Save this as the last good session

@@ -97,7 +97,7 @@ export function ClassWizard() {
 
   // Handle submission
   const handleSubmit = async () => {
-    const { setSubmitting, data } = useClassWizardStore.getState();
+    const { setSubmitting, data, resetWizard } = useClassWizardStore.getState();
     
     try {
       setSubmitting(true);
@@ -112,6 +112,9 @@ export function ClassWizard() {
           sessionsCreated: result.sessions_created,
           invitationsSent: result.invitations_sent
         });
+        
+        // Reset wizard data to clear all fields for next use
+        resetWizard();
         
         // TODO: Show success message/toast
         // TODO: Redirect to class management page

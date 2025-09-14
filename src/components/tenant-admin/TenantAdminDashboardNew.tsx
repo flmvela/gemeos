@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { teacherService, type Teacher as DbTeacher } from '@/services/teacher.service';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Teacher {
   id: string;
@@ -62,12 +63,14 @@ export function TenantAdminDashboardNew() {
   const [searchTerm, setSearchTerm] = useState('');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(true);
+  const [classes, setClasses] = useState<ClassData[]>([]);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(false);
   
   // Check which dashboard we're on
   const isTeacherDashboard = location.pathname === '/teacher/dashboard';
   const isTenantDashboard = location.pathname === '/tenant/dashboard';
   
-  // Fetch real teachers from database
+  // Fetch real teachers from database with their assigned domains
   useEffect(() => {
     const fetchTeachers = async () => {
       const tenantId = session?.current_tenant?.tenant_id || tenantContext?.tenant?.id;
@@ -82,23 +85,65 @@ export function TenantAdminDashboardNew() {
         setIsLoadingTeachers(true);
         const dbTeachers = await teacherService.getTeachersByTenant(tenantId);
         
-        // Transform database teachers to display format
-        const transformedTeachers: Teacher[] = dbTeachers.map((teacher, index) => {
-          const initials = `${teacher.first_name[0]}${teacher.last_name[0]}`.toUpperCase();
-          const colors = ['primary', 'secondary', 'tertiary'] as const;
-          
-          return {
-            id: teacher.id,
-            name: `${teacher.first_name} ${teacher.last_name}`,
-            initials,
-            status: teacher.status === 'active' ? 'online' : teacher.status === 'on_leave' ? 'away' : 'offline',
-            domains: [], // Will be populated when we fetch teacher domains
-            classes: 0, // Will be populated when we have classes data
-            students: 0, // Will be populated when we have student data
-            notifications: 0,
-            avatarColor: colors[index % colors.length]
-          };
-        });
+        // Transform database teachers to display format and fetch their domains
+        const transformedTeachers: Teacher[] = await Promise.all(
+          dbTeachers.map(async (teacher, index) => {
+            const initials = `${teacher.first_name[0]}${teacher.last_name[0]}`.toUpperCase();
+            const colors = ['primary', 'secondary', 'tertiary'] as const;
+            
+            // Fetch domains assigned to this teacher
+            let teacherDomains: string[] = [];
+            try {
+              // First get the domain IDs assigned to the teacher
+              const { data: teacherDomainData, error: tdError } = await supabase
+                .from('teacher_domains')
+                .select('domain_id, is_primary')
+                .eq('teacher_id', teacher.id);
+              
+              if (!tdError && teacherDomainData && teacherDomainData.length > 0) {
+                // Then fetch the domain names
+                const domainIds = teacherDomainData.map(td => td.domain_id);
+                const { data: domainsData, error: domainsError } = await supabase
+                  .from('domains')
+                  .select('id, name')
+                  .in('id', domainIds);
+                
+                if (!domainsError && domainsData) {
+                  teacherDomains = domainsData.map(d => d.name);
+                }
+              }
+            } catch (err) {
+              console.error(`Error fetching domains for teacher ${teacher.id}:`, err);
+            }
+            
+            // Fetch class count for this teacher
+            let classCount = 0;
+            try {
+              const { count, error: classError } = await supabase
+                .from('classes')
+                .select('*', { count: 'exact', head: true })
+                .eq('teacher_id', teacher.id);
+              
+              if (!classError && count !== null) {
+                classCount = count;
+              }
+            } catch (err) {
+              console.error(`Error fetching class count for teacher ${teacher.id}:`, err);
+            }
+            
+            return {
+              id: teacher.id,
+              name: `${teacher.first_name} ${teacher.last_name}`,
+              initials,
+              status: teacher.status === 'active' ? 'online' : teacher.status === 'on_leave' ? 'away' : 'offline',
+              domains: teacherDomains,
+              classes: classCount,
+              students: 0, // Will be populated when we have student enrollment data
+              notifications: 0,
+              avatarColor: colors[index % colors.length]
+            };
+          })
+        );
         
         setTeachers(transformedTeachers);
       } catch (error) {
@@ -113,8 +158,124 @@ export function TenantAdminDashboardNew() {
       }
     };
     
-    fetchTeachers();
-  }, [session, tenantContext, toast]);
+    if (!isTeacherDashboard) {
+      fetchTeachers();
+    }
+  }, [session, tenantContext, toast, isTeacherDashboard]);
+
+  // Fetch classes for teacher dashboard
+  useEffect(() => {
+    const fetchClasses = async () => {
+      if (!isTeacherDashboard) {
+        return;
+      }
+      
+      // Use session.user_id instead of session.user.id
+      if (!session?.user_id) {
+        return;
+      }
+
+      try {
+        setIsLoadingClasses(true);
+        
+        // First check if the user is a teacher
+        const { data: teacherData, error: teacherError } = await supabase
+          .from('teachers')
+          .select('id')
+          .eq('user_id', session.user_id)
+          .single();
+
+        if (teacherError || !teacherData) {
+          setIsLoadingClasses(false);
+          return;
+        }
+
+        // Fetch classes for this teacher
+        const { data: classesData, error: classesError } = await supabase
+          .from('classes')
+          .select(`
+            id,
+            name,
+            description,
+            domain_id,
+            status,
+            max_students,
+            enrollment_type,
+            enrollment_code,
+            created_at
+          `)
+          .eq('teacher_id', teacherData.id)
+          .order('created_at', { ascending: false });
+
+        if (classesError) {
+          console.error('Error fetching classes:', classesError);
+          toast({
+            title: 'Error',
+            description: 'Failed to load your classes.',
+            variant: 'destructive'
+          });
+          return;
+        }
+
+        // Fetch domain names separately to avoid join issues
+        let domainMap: Record<string, string> = {};
+        if (classesData && classesData.length > 0) {
+          const domainIds = [...new Set(classesData.map(c => c.domain_id).filter(Boolean))];
+          if (domainIds.length > 0) {
+            const { data: domains } = await supabase
+              .from('domains')
+              .select('id, name')
+              .in('id', domainIds);
+            
+            if (domains) {
+              domainMap = Object.fromEntries(domains.map(d => [d.id, d.name]));
+            }
+          }
+        }
+
+        // Fetch student counts for each class
+        let studentCounts: Record<string, number> = {};
+        if (classesData && classesData.length > 0) {
+          const classIds = classesData.map(c => c.id);
+          
+          // Count invitations per class
+          const { data: invitations } = await supabase
+            .from('class_student_invitations')
+            .select('class_id')
+            .in('class_id', classIds);
+          
+          if (invitations) {
+            // Count invitations per class
+            invitations.forEach(inv => {
+              studentCounts[inv.class_id] = (studentCounts[inv.class_id] || 0) + 1;
+            });
+          }
+        }
+
+        // Transform to ClassData format with actual student counts
+        const transformedClasses: ClassData[] = (classesData || []).map(cls => ({
+          id: cls.id,
+          name: cls.name || 'Unnamed Class',
+          domain: domainMap[cls.domain_id] || 'General',
+          students: studentCounts[cls.id] || 0, // Use actual count from invitations
+          notifications: 0
+        }));
+
+        setClasses(transformedClasses);
+      } catch (error) {
+        console.error('Error in fetchClasses:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load classes.',
+          variant: 'destructive'
+        });
+      } finally {
+        setIsLoadingClasses(false);
+      }
+    };
+
+    fetchClasses();
+  }, [session, isTeacherDashboard, toast]);
   
   // Dynamic KPI data based on actual teachers
   const kpiData = {
@@ -126,23 +287,11 @@ export function TenantAdminDashboardNew() {
 
   // Teacher dashboard specific KPI data
   const teacherKpiData = {
-    totalClasses: { value: 8, change: '+2 this semester', trend: 'up' },
+    totalClasses: { value: classes.length, change: '+2 this semester', trend: 'up' },
     activeStudents: { value: 210, change: '+15 this month', trend: 'up' },
     goalsAchieved: { value: 47, change: '94% completion rate', trend: 'up' },
     activitiesThisWeek: { value: 132, change: '+23% from last week', trend: 'up' }
   };
-
-  // Classes data for teacher dashboard
-  const classes: ClassData[] = [
-    { id: '001', name: 'Advanced Piano Techniques', domain: 'Piano', students: 24, notifications: 3 },
-    { id: '002', name: 'Music Theory Fundamentals', domain: 'Music Theory', students: 32, notifications: 0 },
-    { id: '003', name: 'Jazz Improvisation', domain: 'Piano', students: 18, notifications: 1 },
-    { id: '004', name: 'Classical Composition', domain: 'Composition', students: 15, notifications: 0 },
-    { id: '005', name: 'IELTS Speaking Preparation', domain: 'IELTS', students: 28, notifications: 5 },
-    { id: '006', name: 'Intermediate Guitar', domain: 'Guitar', students: 22, notifications: 0 },
-    { id: '007', name: 'Advanced Math Problem Solving', domain: 'Mathematics', students: 35, notifications: 2 },
-    { id: '008', name: 'Beginner Piano for Kids', domain: 'Piano', students: 16, notifications: 0 }
-  ];
 
   const getAvatarGradient = (color: string) => {
     switch (color) {
@@ -355,11 +504,15 @@ export function TenantAdminDashboardNew() {
                   </>
                 )}
               </Button>
-              <Button variant="outline" className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center gap-2">
+              <Button 
+                onClick={() => isTeacherDashboard ? navigate('/teacher/students') : undefined}
+                variant="outline" 
+                className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center gap-2"
+              >
                 {isTeacherDashboard ? (
                   <>
-                    <UserPlus className="w-4 h-4" />
-                    Add Student
+                    <Users className="w-4 h-4" />
+                    View Students
                   </>
                 ) : (
                   <>
@@ -420,56 +573,107 @@ export function TenantAdminDashboardNew() {
                     </tr>
                   </thead>
                   <tbody>
-                    {classes.map((classItem) => (
-                      <tr key={classItem.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-gradient-to-r from-[#06b6d4] to-[#8b5cf6] rounded-lg">
-                              <BookOpen className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{classItem.name}</p>
-                              <p className="text-xs text-gray-500">Class ID: {classItem.id}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
-                            {classItem.domain}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1">
-                            <Users className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium text-gray-900">{classItem.students}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-center">
-                            {classItem.notifications > 0 ? (
-                              <div className="relative">
-                                <Bell className="w-5 h-5 text-amber-500" />
-                                <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center">
-                                  <span className="text-white text-xs font-medium">{classItem.notifications}</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <Bell className="w-5 h-5 text-gray-300" />
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Settings className="w-4 h-4 text-gray-500" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Edit className="w-4 h-4 text-gray-500" />
-                            </Button>
+                    {isLoadingClasses ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                            <p className="text-sm text-gray-500">Loading your classes...</p>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ) : classes.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center">
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <BookOpen className="w-12 h-12 text-gray-300" />
+                            <div>
+                              <p className="text-gray-900 font-medium">No classes yet</p>
+                              <p className="text-sm text-gray-500 mt-1">Click "Add Class" to create your first class</p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      classes.filter(classItem => 
+                        !searchTerm || 
+                        classItem.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        classItem.domain.toLowerCase().includes(searchTerm.toLowerCase())
+                      ).map((classItem) => (
+                        <tr key={classItem.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td 
+                            className="py-3 px-4 cursor-pointer"
+                            onClick={() => navigate(`/teacher/classes/${classItem.id}`)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gradient-to-r from-[#06b6d4] to-[#8b5cf6] rounded-lg">
+                                <BookOpen className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">{classItem.name}</p>
+                                <p className="text-xs text-gray-500">Class ID: {classItem.id.substring(0, 8)}...</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td 
+                            className="py-3 px-4 cursor-pointer"
+                            onClick={() => navigate(`/teacher/classes/${classItem.id}`)}
+                          >
+                            <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                              {classItem.domain}
+                            </Badge>
+                          </td>
+                          <td 
+                            className="py-3 px-4 cursor-pointer"
+                            onClick={() => navigate(`/teacher/classes/${classItem.id}`)}
+                          >
+                            <div className="flex items-center gap-1">
+                              <Users className="w-4 h-4 text-gray-400" />
+                              <span className="font-medium text-gray-900">{classItem.students}</span>
+                            </div>
+                          </td>
+                          <td 
+                            className="py-3 px-4 cursor-pointer"
+                            onClick={() => navigate(`/teacher/classes/${classItem.id}`)}
+                          >
+                            <div className="flex items-center justify-center">
+                              {classItem.notifications > 0 ? (
+                                <div className="relative">
+                                  <Bell className="w-5 h-5 text-amber-500" />
+                                  <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center">
+                                    <span className="text-white text-xs font-medium">{classItem.notifications}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Bell className="w-5 h-5 text-gray-300" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8"
+                                onClick={() => navigate(`/teacher/classes/${classItem.id}/concepts`)}
+                                title="Manage Concepts"
+                              >
+                                <Settings className="w-4 h-4 text-gray-500" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8"
+                                onClick={() => navigate(`/teacher/classes/${classItem.id}/edit`)}
+                                title="Edit Class"
+                              >
+                                <Edit className="w-4 h-4 text-gray-500" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               ) : (
@@ -478,16 +682,17 @@ export function TenantAdminDashboardNew() {
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Teacher Name</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-900">Domains Taught</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-900">Learning Domains</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Classes</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Students</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-900">Notifications</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-900"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {isLoadingTeachers ? (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center">
+                        <td colSpan={6} className="py-8 text-center">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                             <p className="text-sm text-gray-500">Loading teachers...</p>
@@ -496,7 +701,7 @@ export function TenantAdminDashboardNew() {
                       </tr>
                     ) : teachers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center">
+                        <td colSpan={6} className="py-8 text-center">
                           <div className="flex flex-col items-center justify-center gap-3">
                             <Users className="w-12 h-12 text-gray-300" />
                             <div>
@@ -508,7 +713,11 @@ export function TenantAdminDashboardNew() {
                       </tr>
                     ) : (
                       teachers.map((teacher) => (
-                        <tr key={teacher.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <tr 
+                          key={teacher.id} 
+                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => navigate(`/tenant/teachers/edit/${teacher.id}`)}
+                        >
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
                               <div className="relative">
@@ -560,6 +769,11 @@ export function TenantAdminDashboardNew() {
                               ) : (
                                 <Bell className="w-5 h-5 text-gray-300" />
                               )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center">
+                              <Edit className="w-4 h-4 text-gray-400 hover:text-gray-600" />
                             </div>
                           </td>
                         </tr>

@@ -5,8 +5,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { Concept } from '@/hooks/useConcepts';
-import { useDifficultyLabels } from '@/hooks/useDifficultyLabels';
+import { DIFFICULTY_LEVELS, getDifficultyLevel } from '@/types/class-concepts.types';
 
 interface AddConceptModalProps {
   concepts: Concept[];
@@ -24,38 +25,14 @@ export const AddConceptModal = ({
   onSave,
 }: AddConceptModalProps) => {
   console.log('🔍 AddConceptModal props:', { parentConceptId, domainId, conceptsCount: concepts.length });
-  // Try to load difficulty labels from database
-  const { data: difficultyLabels = [] } = useDifficultyLabels(domainId);
   
-  // Fallback difficulty levels matching the database table
-  const defaultDifficultyLevels = [
-    { level_value: 1, label: 'Introductory' },
-    { level_value: 2, label: 'Beginner' },
-    { level_value: 3, label: 'Intermediate' },
-    { level_value: 4, label: 'Advanced' },
-    { level_value: 5, label: 'Expert' },
-    { level_value: 6, label: 'Mastery' }
-  ];
-  
-  // Use database labels if available, otherwise use defaults
-  const availableDifficulties = difficultyLabels.length > 0 ? difficultyLabels : defaultDifficultyLevels;
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     parent_concept_id: parentConceptId || '',
-    difficulty_level: 1,
+    difficulty_level: 4, // Default to Moderate difficulty
     metadata: {},
   });
-
-  // Update difficulty level when availableDifficulties changes
-  useEffect(() => {
-    if (availableDifficulties.length > 0) {
-      setFormData(prev => ({
-        ...prev,
-        difficulty_level: availableDifficulties[0].level_value
-      }));
-    }
-  }, [availableDifficulties]);
 
   // Update parent concept when parentConceptId prop changes
   useEffect(() => {
@@ -204,22 +181,51 @@ export const AddConceptModal = ({
           </div>
 
           <div>
-            <Label htmlFor="concept-difficulty">Difficulty</Label>
+            <Label htmlFor="concept-difficulty">Difficulty Level</Label>
             <Select
               value={formData.difficulty_level.toString()}
               onValueChange={(value) => handleDifficultyChange(parseInt(value))}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue />
+                <SelectValue>
+                  {(() => {
+                    const level = getDifficultyLevel(formData.difficulty_level);
+                    return (
+                      <div className="flex items-center gap-2">
+                        <span>{level.icon}</span>
+                        <span>{level.label}</span>
+                        <span className="text-xs text-muted-foreground">({level.description})</span>
+                      </div>
+                    );
+                  })()}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {availableDifficulties.map((label) => (
-                  <SelectItem key={label.level_value} value={label.level_value.toString()}>
-                    {label.label}
+                {DIFFICULTY_LEVELS.map((level) => (
+                  <SelectItem key={level.value} value={level.value.toString()}>
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        variant="outline"
+                        style={{ 
+                          backgroundColor: level.color + '20',
+                          borderColor: level.color,
+                          color: level.color 
+                        }}
+                      >
+                        {level.icon}
+                      </Badge>
+                      <div className="flex-1">
+                        <div className="font-medium">{level.label}</div>
+                        <div className="text-xs text-muted-foreground">{level.description}</div>
+                      </div>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              This affects how the concept contributes to class difficulty calculations
+            </p>
           </div>
 
           <DialogFooter>

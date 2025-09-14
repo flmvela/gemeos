@@ -100,7 +100,12 @@
       "Bash(SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY node verify_user.js)",
       "Bash(SUPABASE_SERVICE_KEY=$SUPABASE_SERVICE_KEY node verify_user.cjs)",
       "Bash(npx playwright install:*)",
-      "mcp__playwright__browser_tabs"
+      "mcp__playwright__browser_tabs",
+      "Bash([ -n \"$SUPABASE_DB_PASSWORD\" ])",
+      "Bash([ -n \"$SUPABASE_SERVICE_KEY\" ])",
+      "Bash(npx playwright codegen:*)",
+      "Bash(find:*)",
+      "Bash(psql:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,302 +1,340 @@
 /**
  * Students Step
- * Add and manage student invitations
+ * Add and invite students to the class
+ * Matches the design pattern of teacher creation wizard
  */
 
 import React, { useState } from 'react';
-import { UserPlus, Mail, Trash2, Edit, Users } from 'lucide-react';
+import { UserPlus, Mail, Upload, X, Check, AlertCircle, Info, Users } from 'lucide-react';
 import { useStudentsStep } from '@/stores/class-wizard.store';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import type { StudentInformation } from '@/stores/class-wizard.store';
-
-interface StudentDialogProps {
-  student?: StudentInformation;
-  studentIndex?: number;
-  onSave: (student: StudentInformation, index?: number) => void;
-  trigger: React.ReactNode;
-  defaultMessage?: string;
-}
-
-function StudentDialog({ student, studentIndex, onSave, trigger, defaultMessage }: StudentDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [formData, setFormData] = useState<StudentInformation>(() => ({
-    firstName: student?.firstName || '',
-    lastName: student?.lastName || '',
-    email: student?.email || '',
-    customMessage: student?.customMessage || defaultMessage || ''
-  }));
-
-  const handleSave = () => {
-    onSave(formData, studentIndex);
-    setOpen(false);
-    
-    // Reset form if adding new student
-    if (!student) {
-      setFormData({
-        firstName: '',
-        lastName: '',
-        email: '',
-        customMessage: defaultMessage || ''
-      });
-    }
-  };
-
-  const isEditing = student !== undefined;
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>
-            {isEditing ? 'Edit Student' : 'Add New Student'}
-          </DialogTitle>
-          <DialogDescription>
-            Add student information and customize their invitation message.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 pt-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First Name *</Label>
-              <Input
-                id="firstName"
-                value={formData.firstName}
-                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                placeholder="John"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name *</Label>
-              <Input
-                id="lastName"
-                value={formData.lastName}
-                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                placeholder="Doe"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address *</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="john.doe@example.com"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="customMessage">Custom Invitation Message (Optional)</Label>
-            <Textarea
-              id="customMessage"
-              value={formData.customMessage || ''}
-              onChange={(e) => setFormData({ ...formData, customMessage: e.target.value })}
-              placeholder="Add a personal message that will be included in the invitation email..."
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground">
-              This message will be included in the invitation email sent to the student.
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>
-              {isEditing ? 'Update Student' : 'Add Student'}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export function StudentsStep() {
-  const { data, update, addStudent, updateStudent, removeStudent } = useStudentsStep();
+  const { data, update, errors } = useStudentsStep();
+  const [emailInput, setEmailInput] = useState('');
+  const [bulkEmails, setBulkEmails] = useState('');
+  const [showBulkInput, setShowBulkInput] = useState(false);
 
-  const handleSaveStudent = (studentData: StudentInformation, index?: number) => {
-    if (index !== undefined) {
-      updateStudent(index, studentData);
-    } else {
-      addStudent(studentData);
+  const handleAddEmail = () => {
+    const email = emailInput.trim().toLowerCase();
+    if (email && validateEmail(email)) {
+      const currentEmails = data?.studentEmails || [];
+      if (!currentEmails.includes(email)) {
+        update({ studentEmails: [...currentEmails, email] });
+      }
+      setEmailInput('');
     }
   };
 
-  const getStudentInitials = (firstName: string, lastName: string) => {
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  const handleRemoveEmail = (emailToRemove: string) => {
+    const currentEmails = data?.studentEmails || [];
+    update({ 
+      studentEmails: currentEmails.filter(email => email !== emailToRemove) 
+    });
   };
 
-  const handleDefaultMessageChange = (message: string) => {
-    update({ defaultCustomMessage: message });
+  const handleBulkAdd = () => {
+    const emails = bulkEmails
+      .split(/[\n,;]+/)
+      .map(e => e.trim().toLowerCase())
+      .filter(e => e && validateEmail(e));
+    
+    const currentEmails = data?.studentEmails || [];
+    const uniqueEmails = [...new Set([...currentEmails, ...emails])];
+    update({ studentEmails: uniqueEmails });
+    setBulkEmails('');
+    setShowBulkInput(false);
+  };
+
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddEmail();
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h4 className="text-lg font-medium mb-2">Add Students</h4>
-        <p className="text-muted-foreground">
-          Add students who will be invited to join your class. Each student will receive an invitation email.
-        </p>
+      <div className="space-y-2">
+        <h3 className="text-xl font-semibold">Add Students</h3>
+        <p className="text-muted-foreground">Invite students to join your class</p>
       </div>
 
-      {/* Default Message Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Mail className="h-5 w-5" />
-            Default Invitation Message
-          </CardTitle>
-          <CardDescription>
-            This message will be pre-filled for each student invitation. You can customize it for individual students.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={data.defaultCustomMessage}
-            onChange={(e) => handleDefaultMessageChange(e.target.value)}
-            placeholder="Welcome to my class! I'm excited to have you join us for this learning journey..."
-            rows={3}
-          />
-        </CardContent>
-      </Card>
+      {errors.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {errors.map((error, index) => (
+              <div key={index}>{error}</div>
+            ))}
+          </AlertDescription>
+        </Alert>
+      )}
 
-      {/* Add Student Button */}
-      <div className="flex justify-start">
-        <StudentDialog
-          onSave={handleSaveStudent}
-          defaultMessage={data.defaultCustomMessage}
-          trigger={
-            <Button className="flex items-center gap-2">
-              <UserPlus className="h-4 w-4" />
-              Add Student
-            </Button>
-          }
-        />
-      </div>
-
-      {/* Students List */}
-      {data.students.length > 0 ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h5 className="font-medium text-sm text-muted-foreground">
-              Students to Invite ({data.students.length})
-            </h5>
-            <Badge variant="outline">
-              {data.students.length} invitation{data.students.length !== 1 ? 's' : ''} will be sent
-            </Badge>
-          </div>
+      {/* Enrollment Type */}
+      <div className="space-y-3">
+        <Label className="text-base">Enrollment Type</Label>
+        <Tabs value={data?.enrollmentType || 'invite-only'} onValueChange={(value) => update({ enrollmentType: value as any })}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="invite-only">Invite Only</TabsTrigger>
+            <TabsTrigger value="open">Open Enrollment</TabsTrigger>
+          </TabsList>
           
+          <TabsContent value="invite-only" className="space-y-4 mt-4">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Only invited students can join this class. You control who has access.
+              </AlertDescription>
+            </Alert>
+          </TabsContent>
+          
+          <TabsContent value="open" className="space-y-4 mt-4">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Anyone with the class code can join. You can set a maximum enrollment limit.
+              </AlertDescription>
+            </Alert>
+            
+            {data?.enrollmentType === 'open' && (
+              <div className="space-y-2">
+                <Label htmlFor="enrollmentCode">Class Code</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="enrollmentCode"
+                    value={data?.enrollmentCode || ''}
+                    onChange={(e) => update({ enrollmentCode: e.target.value.toUpperCase() })}
+                    placeholder="AUTO-GENERATED"
+                    maxLength={8}
+                    className="font-mono text-lg"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+                      update({ enrollmentCode: code });
+                    }}
+                  >
+                    Generate
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Students will use this code to join your class
+                </p>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Add Students Section */}
+      {data?.enrollmentType === 'invite-only' && (
+        <div className="space-y-4">
           <div className="space-y-3">
-            {data.students.map((student, index) => (
-              <Card key={student.id || index}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="text-sm">
-                          {getStudentInitials(student.firstName, student.lastName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      
-                      <div className="space-y-1">
-                        <div>
-                          <h6 className="font-medium">
-                            {student.firstName} {student.lastName}
-                          </h6>
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                            {student.email}
-                          </p>
-                        </div>
-                        
-                        {student.customMessage && (
-                          <div className="mt-2 p-2 bg-muted rounded text-xs">
-                            <p className="text-muted-foreground font-medium mb-1">Custom message:</p>
-                            <p className="line-clamp-2">{student.customMessage}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-1">
-                      <StudentDialog
-                        student={student}
-                        studentIndex={index}
-                        onSave={handleSaveStudent}
-                        defaultMessage={data.defaultCustomMessage}
-                        trigger={
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        }
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => removeStudent(index)}
+            <div className="flex items-center justify-between">
+              <Label className="text-base">Student Email Addresses</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBulkInput(!showBulkInput)}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Bulk Add
+              </Button>
+            </div>
+
+            {/* Single Email Input */}
+            {!showBulkInput ? (
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="student@example.com"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddEmail}
+                  disabled={!emailInput.trim() || !validateEmail(emailInput.trim())}
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Textarea
+                  value={bulkEmails}
+                  onChange={(e) => setBulkEmails(e.target.value)}
+                  placeholder="Enter multiple email addresses, one per line or separated by commas"
+                  rows={5}
+                  className="font-mono text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleBulkAdd}
+                    disabled={!bulkEmails.trim()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Add All
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowBulkInput(false);
+                      setBulkEmails('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Email List */}
+          {(data?.studentEmails?.length || 0) > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Added Students</Label>
+                <Badge variant="secondary">
+                  {data?.studentEmails?.length || 0} student{(data?.studentEmails?.length || 0) !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+              
+              <Card>
+                <CardContent className="p-3">
+                  <div className="max-h-48 overflow-y-auto space-y-2">
+                    {(data?.studentEmails || []).map((email, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{email}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveEmail(email)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <Card className="border-dashed">
-          <CardHeader className="text-center py-8">
-            <div className="mx-auto w-12 h-12 bg-muted rounded-lg flex items-center justify-center mb-4">
-              <Users className="h-6 w-6 text-muted-foreground" />
             </div>
-            <CardTitle className="text-lg">No Students Added Yet</CardTitle>
-            <CardDescription>
-              Click "Add Student" above to start building your class roster.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+          )}
+        </div>
       )}
 
-      {/* Students Summary */}
-      {data.students.length > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h4 className="font-medium text-green-900 mb-2">Invitation Summary</h4>
-          <div className="space-y-1 text-sm text-green-800">
-            <p><strong>{data.students.length}</strong> student{data.students.length !== 1 ? 's' : ''} will be invited</p>
-            <p><strong>Invitations will be sent to:</strong></p>
-            <ul className="ml-4 space-y-1">
-              {data.students.slice(0, 5).map((student, index) => (
-                <li key={index} className="flex items-center gap-2">
-                  <div className="w-1 h-1 bg-green-600 rounded-full" />
-                  {student.firstName} {student.lastName} ({student.email})
-                </li>
-              ))}
-              {data.students.length > 5 && (
-                <li className="text-green-700 italic">
-                  ...and {data.students.length - 5} more
-                </li>
-              )}
-            </ul>
+      {/* Invitation Settings */}
+      <div className="space-y-4">
+        <Label className="text-base">Invitation Settings</Label>
+        
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 rounded-lg border">
+            <div className="flex items-center gap-3">
+              <Mail className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Send Invitations Immediately</p>
+                <p className="text-sm text-muted-foreground">
+                  Email invitations will be sent when the class is created
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={data?.sendInvitesImmediately ?? true}
+              onCheckedChange={(checked) => update({ sendInvitesImmediately: checked })}
+            />
           </div>
+
+          {data?.sendInvitesImmediately && (
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div className="flex items-center gap-3">
+                <Users className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Include Parent/Guardian</p>
+                  <p className="text-sm text-muted-foreground">
+                    Send a copy of the invitation to parents
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={data.includeParentInvite ?? false}
+                onCheckedChange={(checked) => update({ includeParentInvite: checked })}
+              />
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Custom Welcome Message */}
+      <div className="space-y-2">
+        <Label htmlFor="welcomeMessage">Welcome Message (Optional)</Label>
+        <Textarea
+          id="welcomeMessage"
+          value={data?.defaultCustomMessage || ''}
+          onChange={(e) => update({ defaultCustomMessage: e.target.value })}
+          placeholder="Add a personal welcome message for your students..."
+          rows={3}
+          className="resize-none"
+        />
+        <p className="text-sm text-muted-foreground">
+          This message will be included in the invitation email
+        </p>
+      </div>
+
+      {/* Summary */}
+      {(data?.enrollmentType === 'open' || (data?.studentEmails?.length || 0) > 0) && (
+        <Alert className="border-green-200 bg-green-50">
+          <Check className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            {data?.enrollmentType === 'open' ? (
+              <>
+                <strong>Open enrollment enabled:</strong> Students can join with code {data?.enrollmentCode || 'AUTO-GENERATED'}
+              </>
+            ) : (
+              <>
+                <strong>Ready to invite:</strong> {data?.studentEmails?.length || 0} student{(data?.studentEmails?.length || 0) !== 1 ? 's' : ''} will receive invitations
+              </>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Info Alert */}
+      {data?.enrollmentType === 'invite-only' && (data?.studentEmails?.length || 0) === 0 && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            You can add students now or invite them later after creating the class.
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );

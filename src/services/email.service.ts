@@ -249,6 +249,84 @@ export class EmailService {
   }
 
   /**
+   * Send a student invitation email
+   */
+  async sendStudentInvitation(
+    email: string,
+    invitationToken: string,
+    className: string,
+    teacherName: string,
+    customMessage?: string,
+    tenantId?: string
+  ): Promise<{ success: boolean; queueId?: string; error?: string }> {
+    try {
+      // Generate invitation link with token
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8087';
+      const inviteLink = `${baseUrl}/student-setup?token=${invitationToken}`;
+
+      console.log('🎓 [STUDENT-INVITATION] Sending student invitation:', {
+        email,
+        className,
+        teacherName,
+        inviteLink,
+        hasCustomMessage: !!customMessage
+      });
+
+      // Prepare template variables
+      const templateVariables = {
+        invite_link: inviteLink,
+        invitationUrl: inviteLink, // Provide both formats for compatibility
+        class_name: className,
+        teacher_name: teacherName,
+        custom_message: customMessage || '',
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString(), // 30 days
+        support_email: 'support@gemeos.ai'
+      };
+
+      // If tenantId is provided, use queueEmailForTenant
+      let queueId;
+      if (tenantId) {
+        // Use 'invitation' as templateType if 'student_invitation' doesn't exist
+        // This is a temporary workaround until the migration is applied
+        const result = await this.queueEmailForTenant(tenantId, {
+          templateType: 'invitation' as any, // Temporarily use 'invitation' type
+          to: email,
+          templateVariables,
+          priority: 'high',
+          relatedEntityType: 'class_student_invitation',
+        });
+        queueId = result.queueId || null;
+      } else {
+        queueId = await this.queueEmail({
+          templateType: 'invitation' as any, // Temporarily use 'invitation' type
+          to: email,
+          templateVariables,
+          priority: 'high',
+        });
+      }
+
+      // Send immediately
+      if (queueId) {
+        if (tenantId) {
+          await this.processQueueItemForTenant(queueId, tenantId);
+        } else {
+          await this.processQueueItem(queueId);
+        }
+      }
+
+      console.log('✅ [STUDENT-INVITATION] Student invitation sent successfully:', {
+        email,
+        queueId
+      });
+
+      return { success: true, queueId: queueId || undefined };
+    } catch (error: any) {
+      console.error('❌ [STUDENT-INVITATION] Error sending student invitation:', error);
+      return { success: false, error: error.message || 'Failed to send invitation' };
+    }
+  }
+
+  /**
    * Send a tenant admin invitation email
    */
   async sendTenantAdminInvitation(

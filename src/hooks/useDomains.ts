@@ -21,21 +21,19 @@ export const useDomains = (tenantId?: string) => {
       setLoading(true);
       
       if (tenantId) {
-        // Tenant-specific domains from tenant_domains
+        // Fetch domains for the tenant (both tenant-specific and global domains)
         const { data, error } = await supabase
           .from('domains')
-          .select(`
-            *,
-            tenant_domains!inner(
-              tenant_id,
-              is_active
-            )
-          `)
-          .eq('tenant_domains.tenant_id', tenantId)
-          .eq('tenant_domains.is_active', true)
+          .select('*')
+          .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
+          .eq('status', 'active')
           .order('name');
         
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching domains for tenant:', error);
+          throw error;
+        }
+        console.log('Fetched domains for tenant:', data);
         setDomains(data || []);
       } else {
         // Platform admin - all domains

@@ -9,7 +9,7 @@ interface RouteProtectionProps {
 
 export const RouteProtection = ({ children }: RouteProtectionProps) => {
   const location = useLocation();
-  const { session, authState, isPlatformAdmin, isTenantAdmin, isTeacher, enrichmentLoading } = useAuth();
+  const { session, authState, isPlatformAdmin, isTenantAdmin, isTeacher, isStudent, enrichmentLoading } = useAuth();
   
   // Debug logging
   console.log('🔐 RouteProtection Debug:', {
@@ -19,6 +19,7 @@ export const RouteProtection = ({ children }: RouteProtectionProps) => {
     isPlatformAdmin,
     isTenantAdmin,
     isTeacher,
+    isStudent,
     email: session?.email
   });
 
@@ -40,8 +41,27 @@ export const RouteProtection = ({ children }: RouteProtectionProps) => {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
+  // Special handling for student routes
+  if (location.pathname.startsWith('/student/')) {
+    // Students don't need tenant associations
+    if (!isStudent) {
+      // If not a student, redirect based on role
+      if (isPlatformAdmin) {
+        return <Navigate to="/admin/dashboard" replace />;
+      } else if (isTenantAdmin) {
+        return <Navigate to="/tenant/dashboard" replace />;
+      } else if (isTeacher) {
+        return <Navigate to="/teacher/dashboard" replace />;
+      }
+      return <Navigate to="/unauthorized" replace />;
+    }
+    // Allow students to access student routes
+    return <>{children}</>;
+  }
+
   // Check if user has any tenant associations (but don't wait for enrichment)
-  if (!enrichmentLoading && !isPlatformAdmin && (!session?.tenants || session.tenants.length === 0)) {
+  // Skip this check for students as they don't have tenant associations
+  if (!isStudent && !enrichmentLoading && !isPlatformAdmin && (!session?.tenants || session.tenants.length === 0)) {
     // User is authenticated but has no tenant access
     if (location.pathname !== '/no-access') {
       return <Navigate to="/no-access" replace />;

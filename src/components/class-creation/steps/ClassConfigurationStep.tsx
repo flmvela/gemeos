@@ -1,281 +1,370 @@
 /**
  * Class Configuration Step
- * Configure class details, difficulty level, and settings
+ * Configure class details, difficulty levels, and settings
+ * Matches the design pattern of teacher creation wizard
  */
 
 import React from 'react';
-import { Users, MessageCircle, Clock } from 'lucide-react';
+import { Users, MessageCircle, Clock, GraduationCap, AlertCircle, Check } from 'lucide-react';
 import { useConfigurationStep, useClassWizardStore } from '@/stores/class-wizard.store';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-
-const frequencyOptions = [
-  {
-    value: 'weekly',
-    label: 'Weekly',
-    description: 'Class meets once every week',
-    icon: <Clock className="h-4 w-4" />
-  },
-  {
-    value: 'bi-weekly',
-    label: 'Bi-weekly',
-    description: 'Class meets every two weeks',
-    icon: <Clock className="h-4 w-4" />
-  },
-  {
-    value: 'monthly',
-    label: 'Monthly',
-    description: 'Class meets once per month',
-    icon: <Clock className="h-4 w-4" />
-  }
-] as const;
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Slider } from '@/components/ui/slider';
+import { getDifficultyLevel } from '@/types/class-concepts.types';
 
 export function ClassConfigurationStep() {
-  const { data, update } = useConfigurationStep();
-  const selectedDomain = useClassWizardStore((state) => 
-    state.data.domain.availableDomains.find(d => d.id === state.data.domain.selectedDomainId)
+  const { data, update, errors } = useConfigurationStep();
+  const domainData = useClassWizardStore(state => state.data.domain);
+  const selectedDomain = domainData.availableDomains.find(
+    d => d.id === domainData.selectedDomainId
   );
 
-  const handleInputChange = (field: string, value: string | number | boolean) => {
+  const handleInputChange = (field: string, value: any) => {
     update({ [field]: value });
   };
 
-  const selectedDifficultyLevel = selectedDomain?.difficultyLevels.find(
-    level => level.id === data.difficultyLevelId
-  );
+  const handleDifficultyToggle = (levelId: string) => {
+    const currentIds = data.difficultyLevelIds || [];
+    const newIds = currentIds.includes(levelId)
+      ? currentIds.filter(id => id !== levelId)
+      : [...currentIds, levelId];
+    
+    // Update difficulty progression based on selection
+    if (newIds.length === 0) {
+      update({ 
+        difficultyLevelIds: newIds,
+        difficultyProgression: 'single'
+      });
+    } else if (newIds.length === 1) {
+      update({ 
+        difficultyLevelIds: newIds,
+        difficultyProgression: 'single'
+      });
+    } else {
+      // Check if levels are sequential
+      const levelOrders = newIds
+        .map(id => selectedDomain?.difficultyLevels.find(l => l.id === id)?.level_order || 0)
+        .sort((a, b) => a - b);
+      
+      let isSequential = true;
+      for (let i = 1; i < levelOrders.length; i++) {
+        if (levelOrders[i] - levelOrders[i-1] !== 1) {
+          isSequential = false;
+          break;
+        }
+      }
+      
+      update({ 
+        difficultyLevelIds: newIds,
+        difficultyProgression: isSequential ? 'sequential' : 'mixed'
+      });
+    }
+  };
+
+  // Auto-generate class name when difficulty levels change
+  React.useEffect(() => {
+    if (data.difficultyLevelIds.length > 0 && selectedDomain && !data.className) {
+      const firstLevel = selectedDomain.difficultyLevels.find(
+        l => l.id === data.difficultyLevelIds[0]
+      );
+      if (firstLevel) {
+        const levelText = data.difficultyLevelIds.length > 1 
+          ? `${firstLevel.level_name}+` 
+          : firstLevel.level_name;
+        update({ className: `${levelText} ${selectedDomain.name}` });
+      }
+    }
+  }, [data.difficultyLevelIds, selectedDomain]);
 
   return (
-    <div className="space-y-8">
-      {/* Domain Context */}
-      {selectedDomain && (
-        <div className="bg-muted/50 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <Badge variant="secondary">Selected Domain</Badge>
-            <h4 className="font-semibold">{selectedDomain.name}</h4>
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {selectedDomain.description}
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h3 className="text-xl font-semibold">Class Configuration</h3>
+        <p className="text-muted-foreground">Set up your class details and difficulty levels</p>
+      </div>
+
+      {errors.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {errors.map((error, index) => (
+              <div key={index}>{error}</div>
+            ))}
+          </AlertDescription>
+        </Alert>
       )}
 
-      {/* Class Basic Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Class Information
-          </CardTitle>
-          <CardDescription>
-            Set up the basic details for your class
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="className">Class Name *</Label>
-            <Input
-              id="className"
-              value={data.className}
-              onChange={(e) => handleInputChange('className', e.target.value)}
-              placeholder="e.g., Advanced Mathematics, Beginner Science"
-            />
-            <p className="text-xs text-muted-foreground">
-              A descriptive name that students will see when they join your class
-            </p>
-          </div>
+      {/* Class Name and Description */}
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="className">
+            Class Name <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="className"
+            value={data.className}
+            onChange={(e) => handleInputChange('className', e.target.value)}
+            placeholder="e.g., Beginner Piano, Advanced Mathematics"
+            className="text-base"
+          />
+          <p className="text-sm text-muted-foreground">
+            This name will be displayed to students
+          </p>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Description (Optional)</Label>
-            <Textarea
-              id="description"
-              value={data.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
-              placeholder="Describe what students will learn in this class..."
-              rows={3}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="description">Description (Optional)</Label>
+          <Textarea
+            id="description"
+            value={data.description}
+            onChange={(e) => handleInputChange('description', e.target.value)}
+            placeholder="Describe what students will learn in this class..."
+            rows={3}
+            className="resize-none"
+          />
+        </div>
+      </div>
 
+      {/* Difficulty Levels Selection */}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-base">
+            Difficulty Level(s) <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-sm text-muted-foreground mt-1">
+            Select one or more difficulty levels. Students will progress through selected levels.
+          </p>
+        </div>
+
+        {selectedDomain ? (
           <div className="space-y-2">
-            <Label htmlFor="maxStudents">Maximum Students *</Label>
-            <Input
+            {selectedDomain.difficultyLevels.map((level) => {
+              const isSelected = data.difficultyLevelIds.includes(level.id);
+              // Safely get difficulty info, with fallback if level_order is undefined
+              const difficultyInfo = level.level_order 
+                ? getDifficultyLevel(level.level_order) 
+                : { color: '#666', icon: '📚', label: level.level_name || 'Unknown' };
+              
+              return (
+                <div
+                  key={level.id}
+                  className={`flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                    isSelected 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border hover:border-muted-foreground/50'
+                  }`}
+                  onClick={() => handleDifficultyToggle(level.id)}
+                >
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => handleDifficultyToggle(level.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="flex-1 flex items-center gap-3">
+                    <Badge
+                      variant="outline"
+                      className="px-2 py-0.5"
+                      style={{ 
+                        borderColor: difficultyInfo.color,
+                        color: difficultyInfo.color,
+                        backgroundColor: `${difficultyInfo.color}15`
+                      }}
+                    >
+                      {difficultyInfo.icon} {level.level_name || `Level ${level.level_order}`}
+                    </Badge>
+                    <div>
+                      <p className="font-medium">{level.level_name}</p>
+                      {level.description && (
+                        <p className="text-sm text-muted-foreground">{level.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  {isSelected && (
+                    <Check className="h-4 w-4 text-primary" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Please select a domain first to see available difficulty levels.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {data.difficultyLevelIds.length > 1 && (
+          <Alert className="border-primary/50 bg-primary/5">
+            <GraduationCap className="h-4 w-4 text-primary" />
+            <AlertDescription className="text-primary">
+              <strong>Progression Mode:</strong> {
+                data.difficultyProgression === 'sequential' 
+                  ? 'Students will progress through levels in order'
+                  : 'Mixed difficulty levels - suitable for differentiated learning'
+              }
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
+
+      {/* Class Type */}
+      <div className="space-y-3">
+        <Label className="text-base">Class Type</Label>
+        <RadioGroup
+          value={data.frequency}
+          onValueChange={(value) => handleInputChange('frequency', value)}
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label
+              htmlFor="weekly"
+              className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                data.frequency === 'weekly' 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-border hover:border-muted-foreground/50'
+              }`}
+            >
+              <RadioGroupItem value="weekly" id="weekly" />
+              <div className="flex-1">
+                <p className="font-medium">Weekly</p>
+                <p className="text-xs text-muted-foreground">Meets every week</p>
+              </div>
+            </label>
+            
+            <label
+              htmlFor="bi-weekly"
+              className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                data.frequency === 'bi-weekly' 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-border hover:border-muted-foreground/50'
+              }`}
+            >
+              <RadioGroupItem value="bi-weekly" id="bi-weekly" />
+              <div className="flex-1">
+                <p className="font-medium">Bi-weekly</p>
+                <p className="text-xs text-muted-foreground">Every 2 weeks</p>
+              </div>
+            </label>
+            
+            <label
+              htmlFor="monthly"
+              className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                data.frequency === 'monthly' 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-border hover:border-muted-foreground/50'
+              }`}
+            >
+              <RadioGroupItem value="monthly" id="monthly" />
+              <div className="flex-1">
+                <p className="font-medium">Monthly</p>
+                <p className="text-xs text-muted-foreground">Once a month</p>
+              </div>
+            </label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {/* Class Size */}
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="maxStudents">
+            Maximum Students <span className="text-destructive">*</span>
+          </Label>
+          <div className="flex items-center gap-4">
+            <Slider
               id="maxStudents"
-              type="number"
               min={1}
               max={100}
-              value={data.maxStudents}
-              onChange={(e) => handleInputChange('maxStudents', parseInt(e.target.value) || 1)}
+              step={1}
+              value={[data.maxStudents]}
+              onValueChange={([value]) => handleInputChange('maxStudents', value)}
+              className="flex-1"
             />
-            <p className="text-xs text-muted-foreground">
-              The maximum number of students who can join this class (1-100)
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Difficulty Level Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Difficulty Level *</CardTitle>
-          <CardDescription>
-            Choose the appropriate difficulty level for your students
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {selectedDomain ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {selectedDomain.difficultyLevels.map((level) => {
-                const isSelected = data.difficultyLevelId === level.id;
-                
-                return (
-                  <Card
-                    key={level.id}
-                    className={`cursor-pointer transition-all hover:shadow-sm ${
-                      isSelected 
-                        ? 'ring-2 ring-primary border-primary bg-primary/5' 
-                        : 'hover:border-primary/50'
-                    }`}
-                    onClick={() => handleInputChange('difficultyLevelId', level.id)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              style={{ 
-                                borderColor: level.color_code,
-                                color: level.color_code,
-                                backgroundColor: `${level.color_code}10`
-                              }}
-                            >
-                              Level {level.level_order}
-                            </Badge>
-                            <h4 className="font-semibold">{level.level_name}</h4>
-                          </div>
-                          {level.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {level.description}
-                            </p>
-                          )}
-                        </div>
-                        {isSelected && (
-                          <Badge variant="secondary">Selected</Badge>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-muted-foreground">
-              Please select a domain first to see available difficulty levels.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Class Schedule & Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Schedule & Settings
-          </CardTitle>
-          <CardDescription>
-            Configure how often your class meets and communication settings
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Frequency Selection */}
-          <div className="space-y-3">
-            <Label>Class Frequency *</Label>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {frequencyOptions.map((option) => {
-                const isSelected = data.frequency === option.value;
-                
-                return (
-                  <Card
-                    key={option.value}
-                    className={`cursor-pointer transition-all hover:shadow-sm ${
-                      isSelected 
-                        ? 'ring-2 ring-primary border-primary bg-primary/5' 
-                        : 'hover:border-primary/50'
-                    }`}
-                    onClick={() => handleInputChange('frequency', option.value)}
-                  >
-                    <CardContent className="p-4 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className={`p-2 rounded-lg ${
-                          isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                        }`}>
-                          {option.icon}
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-sm">{option.label}</h4>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {option.description}
-                          </p>
-                        </div>
-                        {isSelected && (
-                          <Badge variant="secondary" className="mt-1">
-                            Selected
-                          </Badge>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Communication Settings */}
-          <div className="space-y-4">
-            <Label className="text-base font-medium">Communication Settings</Label>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <MessageCircle className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="allowsStudentMessages" className="text-sm font-medium">
-                    Allow Student Messages
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Students can send you direct messages about the class
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="allowsStudentMessages"
-                checked={data.allowsStudentMessages}
-                onCheckedChange={(checked) => handleInputChange('allowsStudentMessages', checked)}
+            <div className="w-20">
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={data.maxStudents}
+                onChange={(e) => handleInputChange('maxStudents', parseInt(e.target.value) || 1)}
+                className="text-center"
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <p className="text-sm text-muted-foreground">
+            Set the maximum number of students (1-100)
+          </p>
+        </div>
 
-      {/* Configuration Summary */}
-      {data.className && selectedDifficultyLevel && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h4 className="font-medium text-green-900 mb-2">Configuration Summary</h4>
-          <div className="space-y-1 text-sm text-green-800">
-            <p><strong>Class:</strong> {data.className}</p>
-            <p><strong>Domain:</strong> {selectedDomain?.name}</p>
-            <p><strong>Level:</strong> {selectedDifficultyLevel.level_name}</p>
-            <p><strong>Frequency:</strong> {frequencyOptions.find(f => f.value === data.frequency)?.label}</p>
-            <p><strong>Max Students:</strong> {data.maxStudents}</p>
-            <p><strong>Student Messages:</strong> {data.allowsStudentMessages ? 'Enabled' : 'Disabled'}</p>
+        <div className="space-y-2">
+          <Label htmlFor="minStudents">Minimum Students (Optional)</Label>
+          <div className="flex items-center gap-4">
+            <Slider
+              id="minStudents"
+              min={1}
+              max={data.maxStudents}
+              step={1}
+              value={[data.minStudents || 1]}
+              onValueChange={([value]) => handleInputChange('minStudents', value)}
+              className="flex-1"
+            />
+            <div className="w-20">
+              <Input
+                type="number"
+                min={1}
+                max={data.maxStudents}
+                value={data.minStudents || 1}
+                onChange={(e) => handleInputChange('minStudents', parseInt(e.target.value) || 1)}
+                className="text-center"
+              />
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Class will only start with this minimum enrollment
+          </p>
+        </div>
+      </div>
+
+      {/* Settings */}
+      <div className="space-y-4">
+        <Label className="text-base">Additional Settings</Label>
+        
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 rounded-lg border">
+            <div className="flex items-center gap-3">
+              <MessageCircle className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Allow Student Messages</p>
+                <p className="text-sm text-muted-foreground">
+                  Students can send you direct messages
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={data.allowsStudentMessages}
+              onCheckedChange={(checked) => handleInputChange('allowsStudentMessages', checked)}
+            />
           </div>
         </div>
+      </div>
+
+      {/* Summary */}
+      {data.className && data.difficultyLevelIds.length > 0 && (
+        <Alert className="border-green-200 bg-green-50">
+          <Check className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            <strong>Configuration complete:</strong> {data.className} • {
+              data.difficultyLevelIds.length === 1 ? '1 level' : `${data.difficultyLevelIds.length} levels`
+            } • Max {data.maxStudents} students
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );
