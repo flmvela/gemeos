@@ -1,0 +1,20 @@
+# Flask web framework
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Google Cloud libraries
+google-cloud-storage==2.10.0
+google-cloud-pubsub==2.18.1
+
+# Supabase client
+supabase==2.0.0
+
+# Text processing libraries
+tiktoken==0.5.2  # For accurate token counting
+nltk==3.8.1  # For sentence segmentation
+langdetect==1.0.9  # For language detection
+
+# Utility libraries
+python-dateutil==2.8.2
+requests==2.31.0
+numpy==1.24.3

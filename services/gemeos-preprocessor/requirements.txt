@@ -1,0 +1,20 @@
+# Flask web framework
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Google Cloud libraries
+google-cloud-storage==2.10.0
+google-cloud-pubsub==2.18.1
+
+# Supabase client
+supabase==2.0.0
+
+# Additional dependencies for file processing (optional, add as needed)
+# PyPDF2==3.0.1  # For PDF processing
+# python-docx==1.1.0  # For Word document processing
+# openpyxl==3.1.2  # For Excel processing
+# Pillow==10.2.0  # For image processing
+
+# Utility libraries
+python-dateutil==2.8.2
+requests==2.31.0
